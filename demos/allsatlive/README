@@ -1,0 +1,62 @@
+AllSAT Demo on the ETB (Yices 1 Version)
+====================
+
+This directory contains a simple demo of using the ETB to build all
+the solution satisfying a formula using a SAT solver by iteratively
+getting a solution and negating it.
+
+The demo uses yices (http://yices.csl.sri.com/) as the SAT solver, and
+assumes that it can be found in the path.
+
+Running the demo
+----------------
+
+To run the demo, open two terminals in the demos/allsat directory. In
+the first one, start an ETB server by typing:
+
+$ ./start
+
+The ETB server is configured to use yices to answer SAT questions. It
+can also interpret the predicate negateModel, which given a formula
+and a model for that formula produces a new formula which extends its
+input formula with the negation of the model. Finally, the ETB server
+has the following rules to answer allSAT questions:
+
+sat(F, M) :- yices(F, S, M), equal(S, 'sat').
+unsat(F) :- yices(F, S, M), equal(S, 'unsat').
+
+allsat(F, Answers) :- sat(F, M), 
+                      negateModel(F, M, NewF), allsat(NewF, T), 
+                      cons(M, T, Answers).
+allsat(F, Answers) :- unsat(F), nil(Answers).
+
+In the second terminal, you can run an ETB client:
+
+$ ../../etb_clients/etb-shell/etb-shell
+
+And you can put the a.ys yices file, which contains a formula, on the
+ETB:
+
+/ > f = put_file(a.ys)
+
+And start a query to find all the solutions satisfying the formula:
+
+/ > q = allsat(f, Answers)
+
+
+You can wait for the query to complete, this will return all the
+answers:
+
+/ > query_wait(q)
+
+There are four answers, which are triplets of assignments to the
+variable a, b and c.
+
+
+==============
+
+f = put_file(a.ys)
+q = allsat(f, Answers)
+query_wait(q)
+query_answers(q)
+

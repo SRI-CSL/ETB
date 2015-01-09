@@ -1,0 +1,65 @@
+Make Demo on the ETB
+====================
+
+This directory contains a simple demo of using the ETB to build a C
+program, as could be done using make.
+
+This demo requires gcc to be installed on the machine. The ETB rules
+in the file make-rules contains rules to run the demo on 64 bits Linux
+or 64 bits Mac machines. These rules can be extended to support more 
+platforms.
+
+Running the demo
+----------------
+
+To run the demo, open two terminals in the demos/make directory. In
+the first one, start an ETB server by typing:
+
+$ ./start
+
+The ETB server is configured to interpret two compilation predicates:
+gcc_compile and gcc_link. 
+
+In the second terminal, you can run the command etb-make:
+
+$ ./etb-make
+
+This uses the ETB to build a program from the source files that are in
+the directory. The server displays information on which interpreted
+predicates are used.
+
+The ETB rules used to build the program are in the file make_rules.
+
+You can modify the source files and rerun the script, the ETB only
+rebuilds what is necessary.
+
+Stepping through the demo
+-------------------------
+
+The script etb-make is a list of commands for the etb-shell ETB
+client. You can also start the client and give these same commands. To
+start the etb-shell client:
+
+$ ../../etb_clients/etb-shell/etb-shell
+
+You can now load the etb-make script:
+
+/ > load(etb-make)
+
+This execute the script and shows you intermediate results. The ETB
+query that builds the program was stored in a variable q. We can use
+this to look at the query in more details:
+
+/ > claims(q)
+
+Displays all the claims that were established as part of the query q.
+Three claims relate source files to objects files using the predicate
+gcc_compile, one relates objects files to a binary executable using
+the predicate gcc_link, and the main claims directly relates source
+files to the binary executable.
+
+/ > answers(q)
+
+Displays the answers to the query in the form of one or several
+substitution giving values to the variables in the query.
+

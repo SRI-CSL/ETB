@@ -1,0 +1,11 @@
+% -*- prolog -*-
+
+allsat(F, Answers) :- yices(F, S, M),
+	              allsat_iter(F, S, M, Answers).
+
+allsat_iter(F, 'sat', M, Answers) :-
+                      negateModel(F, M, NewF),
+		      yices(NewF, S, NewM),
+		      allsat_iter(NewF, S, NewM, T), 
+                      cons(M, T, Answers).
+allsat_iter(F, 'unsat', M, Answers) :- nil(Answers), equal(F, F), equal(M, M).

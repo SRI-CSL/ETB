@@ -1,0 +1,7 @@
+#!/usr/bin/python ../../etb_clients/etb-shell/etb-shell --port 43765
+
+f = put_file(a.ys)
+q = yices(f, S)
+query_wait(q)
+a = query_answers(q)
+echo(a)

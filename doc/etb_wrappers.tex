@@ -1,0 +1,480 @@
+\documentclass{article}
+
+\usepackage{minted}
+
+\newminted{python}{frame=lines}
+
+\title{ETB Wrappers}
+\author{Gr\'egoire Hamon, Ian A. Mason}
+
+\begin{document}
+
+\maketitle
+
+This document describes the integration of a tool with the {\it
+  Evidential Tool Bus} (ETB). This integration consists in writing a
+wrapper for the tool, the wrapper exposes the tool to the ETB in the
+form of predicates.
+
+\section{Introduction}
+
+A tool wrapper for the ETB is a Python class. Some methods of the
+class are declared as {\it predicates} and are seen as such by the
+ETB. Predicates can be implemented directly in Python or make calls to
+external tools or libraries. Being regular Python classes, wrappers
+can contain any code beside predicates.
+
+The ETB provides support to write tools wrapper in the form of a
+Python library. This document describes the use of this library. We
+consider external command-line tools as examples, but the same
+principles apply to libraries.
+
+\section{Tools and Predicates}
+
+A tool is something that the ETB can call to establish or verify a
+claim. It can be an external command-line tool, a library, or a Python
+function. 
+
+A tool wrapper is a collection of predicates. Predicates from the
+Python point of view, are methods of the wrapper class that have a
+predicate specification.
+
+\subsection{The {\tt Tool} Class}
+
+A tool wrapper should inherit from the {\tt Tool} class. This class
+defines a decorator for predicate specification, as well as generic
+utility functions to get the predicates associated with a tool, get
+the signature of a predicate, or report an error within the tool to
+the ETB. Higher level classes are also available, for example {\tt
+  BatchTool} or {\tt InteractiveTool}.
+
+\subsection{Predicate Specification}
+
+A predicate is a method of the wrapper class that is decorated using
+{\tt Tool.predicate}. The {\tt Tool.predicate} decorator takes as
+argument a string representation of the predicate's signature.
+
+The signature is a comma separated list of arguments to the
+predicate. Each argument is of the form {\tt <sign><name>: <kind>}
+where {\tt <sign>} is either {\tt +} or {\tt -} and indicates whether
+the argument is read or written, {\tt <name>} is a variable name, and
+{\tt <kind>} is the kind of this variable and can be either {\tt
+  value}, {\tt file} or {\tt handle}. For example, the signature of a
+predicate {\tt bmc} that checks if a property {\tt P} is valid for a
+model {\tt M} up to depth {n} could be:
+\begin{pythoncode}
+@Tool.predicate('+property: value, +model: file, +depth: value,
+                 -valid: value')
+\end{pythoncode}
+Note that the specification only indicates the kind of the predicates
+arguments, not their type. This is used to make sure that files are
+synchronized between ETB nodes, or that handles are consistent. Values
+are not interpreted or validated by the ETB, this is left to the tool.
+
+\section{Batch Tools}
+
+Batch tools are the easiest to plug into the ETB. These are tools for
+which each predicate can be invoked in isolation.
+
+\subsection{The {\tt BatchTool} Class}
+
+The {\tt BatchTool} class in the module {\tt structs} can be used to
+write a wrapper for a batch tool. The class offers infrastructure to
+call a tool as an external process or parse the results coming from
+that external process. The main method is {\tt run}:
+\begin{pythoncode}
+  wrapper.run(result, *args)
+\end{pythoncode}
+calls the command specified by {\tt *args}, parses the output and
+returns it in {\tt result}. Intermediate methods are called to call
+the tool ({\tt callTool}) parse ({\tt parseResult}) or interpret ({\tt
+  bindResult}) the output and can be overriden as needed.
+
+\subsection{Example: A {\tt SAL} Batch Wrapper}
+
+We would like to write a wrapper for the SAL tool suite. The suite is
+composed of a set of batch tools with very similar interfaces: most
+tools are called with a set of flags, the name of a SAL context, which
+is also the name of a sal file, and often the name of a property.
+
+We start a new class, {\tt SalBatch}, which is a {\tt BatchTool}:
+\begin{pythoncode}
+class SalBatch(BatchTool):
+  """Batch wrapper for SAL"""
+\end{pythoncode}
+
+We first define a predicate to call the SAL symbolic model-checker,
+{\tt sal-smc}. Our predicate has the following signature:
+\begin{pythoncode}
+  @Tool.predicate("+Model:file, +Prop:value, -Result:value")
+\end{pythoncode}
+The predicates states that analyzing the property {\tt prop} for {\tt
+  model} gives {\tt result}. {\tt model} is the name of a SAL file,
+{\tt prop} is the name of the property to be analyzed, and {\tt
+  result} is a variable. 
+
+We can now write the code for the predicate:
+\begin{pythoncode}
+  def sal_smc(self, model, prop, result):
+    sal_smc = 'sal-smc'
+    (context, _) = os.path.splitext(model)
+    return self.run(result, sal_smc, context, prop)
+\end{pythoncode}
+We first define the command that we want to call, and prepare its
+arguments: The command is simply the string {\tt 'sal-smc'}, we
+extract the name of the context from the file name by removing its
+extension. Finally, we can call the method {\tt run}, and return its
+result: it first invoke the command with the arguments {\tt context}
+and {\tt prop}. It then parses its output and binds the result to {\tt
+  result}. This process invokes three methods of the class {\tt
+  BatchTool} that can be redefined as needed: {\tt callTool} call the
+commands and returns its standard output as a string, {\tt
+  parseResult} takes that string and produces the result in the
+desired format, and {\tt bindResult} binds it to the result
+variable. In this example, we use the default implementation of these
+methods.
+
+Very similarly, we can add a predicate to check for deadlocks:
+\begin{pythoncode}
+@Tool.predicate("+model:file, +module:value, -result:value")
+def sal_deadlock_check(self, model, module, result) :
+  ctx = self.context_from_filename(model)
+  return self.run(result, 'sal-deadlock-checker', ctx, module)
+\end{pythoncode}
+This is exactly as before, we factorized the extraction of the context
+name in a method {\tt context\_from\_filename}. Following this model,
+we can wrap all the SAL batch commands.
+
+\section{Returning Results from Tools}
+
+In addition to the  {\tt Tool} class is the {\tt Result} class hierarchy,
+which is designed to encapsulate the values returned from external tools.
+
+The most common way of returning information to the ETB is by way of a 
+substitution, or binding, of values to variables. A substitution is
+simply a list of bindings, obtained using  {\tt bindResult}, and returned
+to the ETB using the {\tt Substitutions} class.
+
+\begin{pythoncode}
+    @Tool.predicate('+a: value, +b: value, -res: value')
+    def plus(self, a, b, res):
+        a = a.get_val()
+        b = b.get_val()
+        if res.is_var():
+            return Substitutions(self, [self.bindResult(res, a+b)])
+        else:
+            res = res.get_val()
+            return Success(self) if res == a + b else Failure(self)
+\end{pythoncode}
+
+The first argument to the {\tt Substitutions} constructor is the tool itself,
+the second is a list of substitutions. The interpretation being that 
+each substitution satisfies the goal represented by the tool wrapper call.
+
+{\tt Success} and {\tt Failure} are simply convenient abbreviations
+for 
+
+\begin{pythoncode}
+Substitutions(self, [{}])
+Substitutions(self, [])
+\end{pythoncode}
+respectively.
+
+
+An example of returning a non-trivial list of substitutions is given
+by the {\tt in\_range} example, that for each element in the
+range  {\tt [low, up]} returns a substitution binding {\tt res}
+to that element.
+
+\begin{pythoncode}
+    @Tool.predicate("+low: value, +up: value, -res: value")
+    def in_range(self, low, up, res):
+        """Result in [low, up] range."""
+        low = int(low.val)
+        up = int(up.val)
+        if low > up:
+            return Failure(self)
+        if res.is_var():
+            slist =  [self.bindResult(res, i) for i in range(low, up+1)]
+            return Substitutions(self, slist)
+        else:
+            res = int(res.val)
+            if low <= res <= up:
+                return Success(self)
+            else:
+                return Failure(self)
+\end{pythoncode}
+
+
+
+
+
+\section{Interactive Tools}
+
+Interactive tools require more machinery as the ETB needs to keep a
+session open with the tool, and needs to keep track of what is
+happening in a given session so that a claim can be replayed.
+
+The communication between the ETB and the tool is also more involved,
+as the ETB needs to know when a tools is communicating with it.
+
+\subsection{The {\tt InteractiveTool} Class}
+
+The {\tt InteractiveTool} class can be used as a starting point to
+wrap interactive tools. It offers methods to:
+\begin{itemize}
+\item connect to a tool running as an external command {\tt connect}
+\item communicate with this tools through {\tt stdin} ({\tt write} and
+  {\tt stdout} ({\tt read})
+\item takes care of managing sessions {\tt updateSession}
+\end{itemize}
+The default implementation makes assumptions about the protocol used
+to communicate with the tool, but as for the batch case, these
+assumption are encoded within methods that can be overridden:
+\begin{itemize}
+\item every message send to the tool is followed by a response
+\item the response is read line by line
+\item a response is complete if the method {\tt parse\_stop} applied
+  to the last line read returns true (by default the empty string)
+\item the method {\tt parse\_error} takes a response and raise an
+  exception is the response contains an error message. It returns {\tt
+    None} otherwise (default: always return {\tt None})
+\item the method {\tt parse\_output} transform the response in a form
+  suitable for the ETB (default: identity)
+\end{itemize}
+
+\subsection{Example: {\tt sal-sim}}
+
+As a running example, we are going to write a wrapper for the SAL
+simulator. The simulator is started through the command {\tt sal-sim},
+then lets the user step through simulations of a model through a
+read-eval loop. The wrapper is an {\tt InteractiveTool}:
+\begin{pythoncode}
+class SALsim(InteractiveTool):
+  """ETB wrapper around SALsim."""
+\end{pythoncode}
+The first thing to do is to start the tool, and get a handle to
+communicate with it. For {\tt sal-sim}, we define the following
+method, which calls the command, then import the model we want to
+simulate, starts the simulation and returns a handle to the ETB:
+\begin{pythoncode}
+  @Tool.predicate("+Model: file, +Module: value, -Session: handle")
+  def salsim_start(self, model, module, session) :
+    (ctx, ext) = os.path.splitext(model)
+    s = self.connect('sal-sim')
+    self.write(s, '(import! "%s")\n' % ctx)
+    self.write(s, '(start-simulation! "%s")\n' % module)
+    return  Substitutions(self, [ self.bindResult(session, s) ])
+\end{pythoncode}
+The {\tt connect} method of {\tt InteractiveTool} call the command,
+registers the session and gives us a handle to the session back. Using
+this handle, we can call the method {\tt write} to send commands to
+the tool.
+
+The next predicates lets us get the current states of the system, by
+calling the simulator command {\tt (display-curr-states)}:
+\begin{pythoncode}
+    @Tool.predicate("+Session: handle, -States: value")
+    def salsim_current_states(self, session, states) :
+        out = self.write(session, '(display-curr-states)\n')
+        return  Substitutions(self, [ self.bindResult(states, out) ])
+\end{pythoncode}
+We send the command to {\tt sal-sim} and return the output as-is. Note
+that the output of that command is a textual representation of the
+states, and would probably need to be parsed, which we are not doing
+here.
+
+We now move on to a more complex predicate, which is changing the
+session:
+\begin{pythoncode}
+    @Tool.predicate("+SessionIn: handle, -SessionOut: handle")
+    def salsim_step(self, sessionIn, sessionOut) :
+        self.write(sessionIn, '(step!)\n')
+        slist = [ self.bindResult(sessionOut, self.updateSession(sessionIn)) ]
+        return Substitutions(self, slist)
+\end{pythoncode}
+{\tt salsim\_step} causes the running simulation to take a step. The
+predicates takes the session to advance as argument and returns a new
+session. The input session becomes unavailable. This is implemented by
+calling the command, then using the {\tt updateSession} method.
+
+Finally, we can have a predicate to close the session:
+\begin{pythoncode}
+    @Tool.predicate("+Session: handle")
+    def salsim_close_session(self, session) :
+        self.write(session, '(exit)\n')
+        return Failure(self)
+\end{pythoncode}
+
+\section{Registering Tools and Rules}
+
+\subsection{Registering a Tool}
+
+Once a wrapper class has been written for a tool, it still needs to be
+instantiated and registered with the ETB. A wrapper should be in a
+Python file that contains a {\tt register} function. This function is
+executed by the ETB when the file is loaded. As an example, to
+register the {\tt SalBatch} wrapper, we write:
+\begin{pythoncode}
+def register(etb):
+  "Register the tool"
+  etb.add_tool(SalBatch(etb))
+\end{pythoncode}
+
+
+\subsection{Generating Queries}
+
+As a prequel to describing the ability to add rules dynamically,
+we illustrate the ability to generate and add simple queries
+to the ETB system.
+In this example we have two mutually {\em recursive} predicates
+{\tt ping(M)} and {\tt pong(M)}, given by the two sets of principles:
+\begin{verbatim}
+ping(0) :- 
+ping(M + 1) :- pong(M) 
+
+pong(0) :- 
+pong(M + 1) :- ping(M) 
+\end{verbatim}
+Note that these are not ETB rules because a predicate cannot
+be both a wrapper and the {\em head} of a rule. So we must use
+the ability for wrappers to generate queries to achieve the
+same effect.
+
+
+To return a set of dynamic subqueries from a goal {\tt G} we provide the {\tt Queries} class.
+\begin{pythoncode}
+  Queries(tool, slist, qlist)
+\end{pythoncode}
+where  {\tt slist} should be a list of {\tt N} substitutions
+\begin{verbatim}
+[s0, s1, ... , sN]
+\end{verbatim}
+and {\tt qlist} is a list of {\tt M} queries.
+\begin{verbatim}
+[q0, q1, ... , qM]
+\end{verbatim}
+This has the effect of adding the rules:
+\begin{verbatim}
+si(G) :- si(qj)
+\end{verbatim}
+for each {\tt si}, and {\tt qj} in the two lists.
+
+As an illustration we provide the string version of {\tt ping},
+and the term version of {\tt pong}
+
+\begin{pythoncode}
+@Tool.predicate('+n: value')
+def ping(self, n):
+    n = int(n.val)
+    if n == 0 :
+        return Success(self)
+    else :
+        return Queries(self, [{}], [ 'pong(%s)' % str(n-1) ] )
+\end{pythoncode}
+
+\begin{pythoncode}
+@Tool.predicate('+n: value')
+def pong(self, n):
+    n = int(n.val)
+    if n == 0 :
+        return Success(self)
+    else :
+        return Queries(self, [{}], [ etb.terms.mk_apply("ping", [n-1]) ] )
+\end{pythoncode}
+
+
+
+
+\subsection{Adding Rules to the ETB}
+
+The ETB includes the ability to generate and add rules dynamically.
+We use the, albeit artificial, {\tt verycomposite} example to showcase this
+use of wrappers to return new (temporary or pending) rules. 
+
+We say an integer {\tt M} is {\em composite} if it is not prime, written
+{\tt comp(M)}.
+A number {\tt M} is said to be {\tt N-verycomposite}  if
+{\tt comp(M)}, {\tt comp(M + 1)}, ...., {\tt comp(M + N)}.
+We write  {\tt verycomposite(M, N)} to express that {\tt M} is  {\tt N-verycomposite}.
+Some simple examples are 
+{\tt verycomposite(8, 3)}, {\tt verycomposite(24, 5)}, and 
+{\tt verycomposite(90, 7)}.
+
+The general principle is of the form:
+\begin{verbatim}
+verycomposite(M, N) :- comp(M), comp(M + 1), ..., comp(M + N) .
+\end{verbatim}
+which is not a rule, but a rule scheme for each fixed {\tt M}. We can use the
+ability to generate rules dynamically to achieve the same effect.
+
+To return a set of dynamic rules from a goal {\tt G} we provide the {\tt Lemmata} class.
+\begin{pythoncode}
+  Lemmatta(tool, slist, llist)
+\end{pythoncode}
+where  {\tt slist} should be a list of {\tt N} substitutions
+\begin{verbatim}
+[s0, s1, ... , sN]
+\end{verbatim}
+and {\tt llist} is a list of {\tt N} lemmattas
+\begin{verbatim}
+[l0, l1, ... , lN].
+\end{verbatim}
+each lemmattas itself {\tt li} being a list terms. 
+\begin{verbatim}
+li = [q0i, ... , qMi]
+\end{verbatim}
+Using this form results in {\tt N} rules being added to the ETB framework.
+Each rule being of the form:
+\begin{verbatim}
+si(G) :- si(q0i), ..., si(qMi)
+\end{verbatim}
+
+We give two examples in the wrappers {\tt verycomposite} and {\tt verycompositeT}
+to illustrate the API. We begin with the simple wrapper {\tt comp}
+
+\begin{pythoncode}
+@Tool.predicate('+n: value')
+ def comp(self, n):
+     n = abs(int(n.val))
+     if isPrime(n):
+         return Failure(self)
+     else:
+         return Success(self)
+\end{pythoncode}
+
+that relies on the predicate {\tt isPrime}. 
+
+
+%     Lemmatta(tool, slist, llist)
+%     slist should be a substitution list: [s0, s1, ... , sN]
+%     - the substitution can either be a dict or a terms.Subst object
+%     llist should be a list of lemmatta: [l0, l1, ... , lN]
+%     - the lists should be the same length
+%     - each li is itself a list: [qi0, qi1, ... qiM] where each qi0 is either a terms.Term or a string.
+
+The first version uses the string representation of terms, these are parsed behind the scenes 
+by the {\tt Lemmatta} class.
+\begin{pythoncode}
+@Tool.predicate('+n: value, +m: value')
+def verycomposite(self, n, m):
+    n = abs(int(n.val))
+    m = abs(int(m.val))
+    termlist = [ "comp(%s)" % i  for i in range(n, n + m)]
+    return Lemmatta(self, [{}], [ termlist ])
+\end{pythoncode}
+
+Using the string representation is not mandatory. If it were more convenient to use terms,
+they could be provoded instead, as they are in {\tt verycompositeT}:
+
+\begin{pythoncode}
+@Tool.predicate('+n: value, +m: value')
+def verycompositeT(self, n, m):
+    n = abs(int(n.val))
+    m = abs(int(m.val))
+    lemmatta = [ etb.terms.mk_apply("comp", [i])  for i in range(n, n + m)]
+    return Lemmatta(self, [{}], [ lemmatta ])
+\end{pythoncode}
+
+
+\end{document}

@@ -1,0 +1,14 @@
+#!/usr/bin/env etbsh
+
+# We first put all of our files
+h1 = put_file(component1.h)
+src1 = put_file(component1.c)
+h2 = put_file(component2.h)
+src2 = put_file(component2.c)
+srcMain = put_file(main.c)
+
+# Build everything, wait, then get the exe back
+q = query(main("ARCH", $src1, $h1, $src2, $h2, $srcMain, "main_EXE", Exe))
+r = query_wait($q)
+exeFile = $r[0][Exe]
+get_file($exeFile, "main_EXE")

@@ -1,0 +1,28 @@
+#includes targets not currently in the **dist** Makefile
+all: engine.html ref 
+
+deriv: derivation_and_inference.tex derivation_and_inference_slides.tex
+	pdflatex derivation_and_inference.tex
+	pdflatex derivation_and_inference_slides.tex
+
+# with pandoc, conversion to html from markdown
+engine.html: engine.mkd
+	pandoc $< -t html -o $@
+
+ref:
+	rm -rf reference
+	mkdir reference
+	sphinx-apidoc -s txt -d 5 ../etb -o reference -A "Simon Cruanes, Gregoire Hamon, Stijn Heymans, Ian A. Mason, Shankar Natarajan, Sam Owre" -F -H "ETB: The Evidential Toolbus"
+	# It's nicer to have modules on separate pages (my current anaconda sphinx
+	# does not have that option -E or --separate in it yet)
+	# see https://bitbucket.org/birkenfeld/sphinx/pull-request/161/added-option-to-apidoc-to-write-each/diff
+	#sphinx-apidoc -s txt -d 5 .. -o reference -E -F -H "ETB"
+	cp conf.py reference/
+	(cd reference; make html)
+	# this default.css containts an admonition-todo div
+	cp default.css reference/_build/html/_static/
+
+clean:
+	rm -rf reference engine.html
+
+.PHONY:  engine.html ref

@@ -1,0 +1,3 @@
+#!/bin/sh
+
+rm -rf etb_git etb_claims; ../../src/etbd.py

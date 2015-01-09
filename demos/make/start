@@ -1,0 +1,29 @@
+#!/bin/bash
+
+#./start [port]  
+#if you specify a port it uses that, and goes into debug mode
+
+rm -rf etb_git etb_claims main etb-make main_*_*;
+
+SYS=`python -c "import platform; print '%s' % platform.system()"`
+ARCH=`python -c "import platform; print '%s_%s' % (platform.system(), platform.machine())"`
+
+#on windows we have to have a ".exe" on the end of the executable :-(
+if [ $SYS == "Windows" ]
+then
+    EXE=$ARCH.exe
+else
+    EXE=$ARCH
+fi
+
+sed -e "1,\$s/ARCH/$ARCH/g" -e "1,\$s/EXE/$EXE/g" < etb-make.in > etb-make
+chmod u+x etb-make
+
+port=$1
+
+if [ -z "$port" ]
+then
+    etbd
+else
+    etbd -d debug -p "$port"
+fi

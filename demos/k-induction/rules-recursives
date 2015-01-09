@@ -1,0 +1,41 @@
+% -*- prolog -*-
+
+% We are trying to prove that a formula P is an invariant for a system M.
+% This is the case if there exists a k for which P is k-inductive.
+invariant(M, P) <= transitionSystem(M), 
+                   kInductive(M, P, K).
+
+% P is k-inductive if it holds up to step k (using bmc), and if the induction holds
+kInductive(M, P, K) <= bmc(M, P, K), inductionStep(M, P, K).
+
+bmc(M, P, K) <= yicesBmcFormula(M, P, K, F), yicesUnsat(F).
+inductionStep(M, P, K) <= yicesInductionFormula(M, P, K, F), yicesUnsat(F).
+
+
+% The above gives us a proof that P is an invariant if we know k. 
+% We can search for k iteratively. iterInductive looks for all the k for
+% which the property is k-inductive upto a given bound
+iterInductive(M, P, K, U) :- in_range(1, U, K), kInductive(M, P, K).
+
+% A recursive variant: we only try k+1 if P is not k-inductive
+
+counterExample(M, P, K) :- yicesBmcFormula(M, P, K, F), yicesSat(F).
+failInductionStep(M, P, K) :- yicesInductionFormula(M, P, K, F), yicesSat(F).
+
+nonKInductive(M, P, K) :- counterExample(M, P, K).
+nonKInductive(M, P, K) :- bmc(M, P, K), failInductionStep(M, P, K).
+
+recInductive(M, P, K, U) :- lte(K, U), equal(K, 1), kInductive(M, P, K).
+recInductive(M, P, K, U) :- lte(K, U), pred(K, J), nonKInductive(M, P, J), kInductive(M, P, K).
+recInductive(M, P, K, U) :- lte(K, U), succ(K, L), nonKInductive(M, P, K), recInductive(M, P, L, U).
+
+% We can derive that P is an invariant using iterInductive
+% invariant(M, P) :- transitionSystem(M), 
+%                    iterInductive(M, P, K, 5).
+
+invariant(M, P) :- transitionSystem(M), 
+                   recInductive(M, P, 1, 5).
+
+% Yices
+yicesUnsat(F) <= yices(F, R), equal(R, 'unsat').
+yicesSat(F) <= yices(F, R), equal(R, 'sat').

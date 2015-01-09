@@ -1,0 +1,5 @@
+#!/bin/bash
+
+rm -rf etb_git etb_claims;
+
+ ../../src/etbd.py --conf etb_conf_rec.ini

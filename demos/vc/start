@@ -1,0 +1,15 @@
+#!/bin/bash
+
+#./start [port]  
+#if you specify a port it uses that, and goes into debug mode
+
+rm -rf etb_git etb_claims;
+
+port=$1
+
+if [ -z "$port" ]
+then
+    ../../src/etbd.py 
+else
+    ../../src/etbd.py -d debug -p "$port"
+fi

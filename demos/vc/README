@@ -1,0 +1,27 @@
+This example, albeit artificial, is designed to showcase the
+use of wrappers to return new (temporary or pending) rules. 
+
+We say an integer is composite if it is not prime.
+A number M is said to be N-verycomposite  if
+
+composite(M), composite(M + 1), ... composite(M + N)
+
+Thus we have a principle of the form:
+
+verycomposite(M, N) :- composite(M), composite(M + 1), ... composite(M + N) .
+
+
+We give two examples in the wrappers verycomposite and verycompositeT
+to illustrate the API.
+
+
+./start 
+
+Some examples:
+
+q3 = verycomposite(8, 3)
+
+q5 = verycomposite(24, 5)
+
+q7 = verycomposite(90, 7)
+

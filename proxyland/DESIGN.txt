@@ -1,0 +1,58 @@
+
+==================== Version 0 =================
+
+A user will request a etb server by submitting their email address and
+local etb host and port.  
+
+We should make sure we can reach this server before we continue.
+
+If reachable we will then mail them a confirmation
+link. Upon clicking on the link they will receive two names:
+
+their local etb's name
+their requested etb server's name 
+
+They should then be able to link the two etb nodes using the new proxylink command:
+
+We should also provide links to look at:
+
+the logs of their remote server
+
+They be able to connect to it via etb_shell (once they have the name, and
+the latest version of etb-shell)
+
+what if they need to restart their remote server?
+
+how do we provide them logs?
+
+what about the inevitable garbage collection problem?
+
+==================== server architecture =================
+
+Might be best if we have two "sites" the registration/admin control
+site, and the proxy server. Keep the two separate, they will just
+share a data base.
+
+
+===================== data base stuff =====================
+
+user:  email host port confirm_id
+
+confirm:  confirm_id remote_name local_name
+
+local_server: user_id  start_timestamp local_directory
+
+
+
+* just to get past the  static version of proxy we need a map from 
+
+name to host and port 
+
+
+========== Ian's notes =============
+
+
+Bad name doesn't 404 yet?
+
+
+Make sure they can reconnect to their server with the same command...

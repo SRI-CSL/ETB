@@ -1,0 +1,124 @@
+This is the Evidential Tool Bus (ETB) v0.2.0dev1
+==========================================
+
+ETB requires Python 2.7.X (not 3.X) and Git, see instruction below to
+check Python's version.
+
+In addition, some Python modules are required, see below for detailed
+installation instruction. The required modules are:
+  - argparse
+  - pyparsing
+
+  - pydot
+  - graphviz
+
+  
+MacOSX and Linux:
+-----------------
+
+Python is usually already installed. You can check the version using:
+
+  python --version
+
+ETB requires Python 2.7.x. If it is not the right version, use your
+package manager to update it, or rebuild Python from sources available
+at http://www.python.org. For MacOSX, you can follow the instruction
+at http://www.python.org/getit/mac/. Make sure easy_install is also
+available; it is part of the 'python-setuptools' package.
+
+You might also have several version of Python installed. In this case
+version 2.7 should be available as:
+
+  python2.7
+
+If that is the case, but is not the default version you can invoke the
+ETB tools with that version e.g.:
+
+  python2.7 etbd.py
+
+Invokes the ETB server using Python 2.7.
+
+You will probably need to set your PYTHONPATH to include the 
+source directory of the etb, i.e. etb/src.
+
+
+Git is installed in linux using the package manager or from source.
+For MacOSX, Git is available at:
+http://code.google.com/p/git-osx-installer/
+
+The ETB command line clients, client.py or etb-shell, require the
+readline and argparse modules, these may be obtained with (as root):
+
+  easy_install pydot readline argparse pyparsing==1.5.7
+
+Aside:
+
+easy_install on linux can be installed via:
+
+sudo apt-get install python-setuptools
+sudo apt-get install python-dev
+  
+Windows:
+--------
+
+(Caveat: this may not be the best possible setup, feel free to make
+suggestions for improvement)
+
+You need to have Git available, the easiest way is to install msysgit from
+code.google.com/p/msysgit.  This provides a shell that makes it easy to run
+and test ETB.
+
+After installing msysgit, run it (click the icon on the Desktop, or
+from the Start->Programs button). A shell should pop up similar to the
+Windows command prompt shell, but it behaves mostly like Unix. At the
+prompt, type 'python --version' to check if python is available and
+which version you have. It may be that python is installed, but not in
+your msysgit path. To fix this, find out where Python is installed,
+e.g., c:\Python27 and add the line
+
+  PATH=/c/Python27:/c/Python27/Scripts:$PATH
+
+to the file ~/.bashrc (creating it in your favorite editor if
+necessary). The '~' there is your user directory as msysgit sees it -
+you can find out where it really is by typing:
+
+  echo ~
+
+which should return something like /c/Users/myname
+This translates to c:\Users\myname in Windows.
+
+If Python 2.7 is not there, download and install it from
+http://www.python.org/getit/windows/ (Note: do not use version 3.0 for
+ETB) Add the path to is as described above. Make sure easy_install is
+available (type 'which easy_install' at the msysgit prompt). It should
+be in the Python27/Scripts folder. You may need to install
+easy_install seperately. One this is done you can use it to install
+any additional packages such as pyparsing etc. Note that Windows uses
+pyreadline, not readline.
+
+easy_install pyreadline argparse pyparsing==1.5.7
+
+All Platforms:
+--------------
+
+In a shell, cd to the <ETB>/src directory, where <ETB> is the path to
+the ETB code. Type:
+
+  ./etbd.py
+
+The ETB daemon should start. If it complains that some module is
+missing, find the name of the missing module, e.g., modname, and do
+easy_install modname repeat until the ETB no longer complains, and is
+simply listening on port 26532.
+
+Start up a new shell (or a new msysgit window on Windows), cd to the
+<ETB>/etb_clients/etb-shell directory, and run:
+
+  ./etb-shell
+
+Again, if any modules are missing, easy_install them. If everthing is OK, you should
+get a simple '>' prompt; help should list the available ETB commands.
+
+At this point, the ETB core is now installed, the next step is to get
+some tool wrappers and configure your workflow.
+

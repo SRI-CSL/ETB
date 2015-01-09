@@ -1,0 +1,33 @@
+% -*- prolog -*-
+
+
+gcc_compile('Darwin_i386', Src, Dep, Obj) :- gcc_compile_Darwin_i386(Src, Dep, Obj).
+gcc_compile('Darwin_x86_64', Src, Dep, Obj) :- gcc_compile_Darwin_x86_64(Src, Dep, Obj).
+gcc_compile('Linux_x86_64', Src, Dep, Obj) :- gcc_compile_Linux_x86_64(Src, Dep, Obj).
+gcc_compile('Linux_i686', Src, Dep, Obj) :- gcc_compile_Linux_i686(Src, Dep, Obj).
+gcc_compile('Windows_x86', Src, Dep, Obj) :- gcc_compile_Windows_x86(Src, Dep, Obj).
+gcc_compile('Windows_AMD64', Src, Dep, Obj) :- gcc_compile_Windows_AMD64(Src, Dep, Obj).
+
+gcc_link('Darwin_i386', Objs, Name, Exe) :- gcc_link_Darwin_i386(Objs, Name, Exe).
+gcc_link('Darwin_x86_64', Objs, Name, Exe) :- gcc_link_Darwin_x86_64(Objs, Name, Exe).
+gcc_link('Linux_x86_64', Objs, Name, Exe) :- gcc_link_Linux_x86_64(Objs, Name, Exe).
+gcc_link('Linux_i686', Objs, Name, Exe) :- gcc_link_Linux_i686(Objs, Name, Exe).
+gcc_link('Windows_x86', Objs, Name, Exe) :- gcc_link_Windows_x86(Objs, Name, Exe).
+gcc_link('Windows_AMD64', Objs, Name, Exe) :- gcc_link_Windows_AMD64(Objs, Name, Exe).
+
+cc_compile(Arch, Src, Dep, Obj) :- gcc_compile(Arch, Src, Dep, Obj).
+cc_link(Arch, Objs, Name, Exe) :- gcc_link(Arch, Objs, Name, Exe).
+
+main(Arch, Src1, H1, Src2, H2, Main, Name, Exe) :- cc_compile(Arch, Src1, [H1], Obj1),
+                                                   cc_compile(Arch, Src2, [H2], Obj2),
+                                                   cc_compile(Arch, Main, [H1, H2], ObjMain),
+                                                   cc_link(Arch, [Obj1, Obj2, ObjMain], Name, Exe).
+
+
+main_Darwin_x86_64(Src1, H1, Src2, H2, Main, Exe) :- main('Darwin_x86_64', Src1, H1, Src2, H2, Main, 'main_Darwin_x86_64', Exe).
+main_Darwin_i386(Src1, H1, Src2, H2, Main, Exe) :- main('Darwin_i386', Src1, H1, Src2, H2, Main, 'main_Darwin_i386', Exe).
+main_Linux_x86_64(Src1, H1, Src2, H2, Main, Exe) :- main('Linux_x86_64', Src1, H1, Src2, H2, Main, 'main_Linux_x86_64', Exe).
+main_Linux_i686(Src1, H1, Src2, H2, Main, Exe) :- main('Linux_i686', Src1, H1, Src2, H2, Main, 'main_Linux_i686', Exe).
+main_Windows_x86(Src1, H1, Src2, H2, Main, Exe) :- main('Windows_x86', Src1, H1, Src2, H2, Main, 'main_Windows_x86.exe', Exe).
+main_Windows_AMD64(Src1, H1, Src2, H2, Main, Exe) :- main('Windows_AMD64', Src1, H1, Src2, H2, Main, 'main_Windows_AMD64.exe', Exe).
+

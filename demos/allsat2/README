@@ -1,0 +1,78 @@
+AllSAT Demo on the ETB (Yices 2 Version)
+====================
+
+This directory contains a simple demo of using the ETB to build all
+the solutions satisfying a formula using a SAT solver by iteratively
+getting a solution and negating it to get the next one.
+
+The demo uses yices (http://yices.csl.sri.com/) as the SAT solver, and
+assumes that it can be found in your path.
+
+Running the demo
+----------------
+For the impatient, run etbsh, then the following:
+
+f = put_file(a.ys)
+q = query(allsat($f, Answers))
+query_wait($q)
+query_answers($q)
+
+Read below for more details.
+
+To run the demo, cd to the demos/allsat directory (containing this README).
+Then run the ETB shell
+
+% etbsh
+
+This loads the etb_conf.ini file, which lists the rules files to load - all
+other parameters take default values, use etbsh --help to see them all.
+In particular, the wrappers are loaded from the wrappers subdirectory.
+
+The ETB server is configured to use yices to answer SAT questions. It also
+interprets the predicate negateModel, which given a formula and a model for
+that formula produces a new formula which extends its input formula with the
+negation of the model. Finally, the ETB server has the following rules to
+answer allSAT questions:
+
+sat(F, M) :- yices(F, S, M), equal(S, sat).
+unsat(F) :- yices(F, S, M), equal(S, unsat).
+
+allsat(F, Answers) :- sat(F, M), 
+                      negateModel(F, M, NewF), allsat(NewF, T), 
+                      cons(M, T, Answers).
+allsat(F, Answers) :- unsat(F), nil(Answers).
+
+You need to introduce the yices file a.ys to the ETB server (in the Git working
+directory).  This file contains a boolean formula, for which we are trying
+to find satisfying assignments.
+
+% f = put_file(a.ys)
+
+The put_file command returns a file handle (sometimes called a fileref),
+consisting of a filename and a sha-1 hash.  You can see this using echo:
+
+% echo $f
+{"sha1": "6d89a6b7d3401f5d39c685484351b713df76c66d", "file": "a.ys"}
+
+Now start a query to find all the solutions satisfying the formula:
+
+% q = query(allsat($f, Answers))
+
+Here q is just a unique identifier assigned to the query.  You can submit
+other queries, or get the answers to a specific one using query_wait.
+
+% r = query_wait(q)
+
+There are four answers, which are triplets of assignments to the
+variable a, b and c.
+
+To see them use:
+
+% query_answers(q)
+
+It should produce (note that the query id will be different):
+
+Answers for query 37e9f9539b7e4951bdf8db59eba0e20a
+==================================================
+subst(Answers = ["(= c false)(= a false)(= b false)", "(= c true)(= a false)(= b false)", "(= c true)(= a false)(= b true)", "(= c true)(= a true)(= b true)"])
+

@@ -1,0 +1,183 @@
+#+OPTIONS: toc:nil
+#+TITLE: ETB Tutorial
+
+* Installation
+
+Installing ETB is easy.  This assumes Windows, MacOSX or Linux, but ETB
+probably runs on most any platform that has Python 2.7.x and its packages
+available.  Make sure Python 2.7.x and PIP are installed - google for
+details.  If you plan on doing wrapper development (or Python development
+in general), it's worth installing =virtualenv= and spending a few minutes
+learning about it.  ETB is installed using
+#+begin_src sh
+pip install EvidentialToolBus
+#+end_src
+Once installed, =etbsh= and =etbd= should be in your path, though you may
+need to run =hash -r= (for Bash) or its equivalent from your shell to see
+them.
+
+** ETB shell
+The easiest way to run the ETB is with the shell =etbsh=.
+As described in section 
+
+* Datalog rules
+ETB is essentially a datalog engine.  This means you can write datalog
+rules such as
+
+#+name: parent
+#+begin_src etb.rules :tangle parent :noweb yes
+parent(bill,mary).
+parent(alice,mary).
+parent(mary,john).
+
+ancestor(X,Y) :- parent(X,Y).
+ancestor(X,Y) :- parent(X,Z),ancestor(Z,Y).
+#+end_src
+
+The first three rules are simple facts; i.e., ground rules without a
+body.  The last two rules include a head and a body, and involve
+variables.  These are similar to Prolog rules, but restricted to be sound
+and complete (e.g., no cut).
+
+#+name: parent_config
+#+begin_src etb.config :tangle parent :noweb yes
+[etb]
+rule_files = parent.pl
+#+end_src
+
+
+** A simple wrapper
+** Working with files
+** Working with directories
+** Dynamic subgoals
+** Distributed ETB
+** Sessions
+
+
+** Wrappers
+
+ETB wrappers are written in python.  The basic idea is that wrappers
+extend the underlying datalog engine with semantic attachments.  Wrappers
+normally go into the wrappers subdirectory, where the etbd daemon is
+started.  A wrapper file normally starts with some imports, including
+
+#+BEGIN_SRC python
+from etb.wrapper import Tool, BatchTool, Success, Failure, Substitutions, Lemmatta, Errors
+from etb.terms import mk_term
+#+END_SRC
+
+This is followed by the class definition for your wrapper, which inherits
+from =BatchTool= if it is a tool or tools that run, produce results, and exit.
+The =InteractiveTool= class is discussed further below.
+#+BEGIN_SRC python
+class MyWrapper(BatchTool):
+    '''
+    Simple wrapper example
+    '''
+#+END_SRC
+
+Within this class are normal python functions, but some are decorated to
+indicate to the ETB that they are wrappers to be invoked by the engine.
+For example,
+#+BEGIN_SRC python
+    @Tool.predicate("+left: value, +right: value")
+    def equal(self, left, right):
+        if left == right:
+            return Success(self)
+        else:
+            return Failure(self)
+#+END_SRC
+
+The =Tool.predicate= decorator indicates that the function following can
+be invoked by the ETB, and its name matches the claim created for it.
+The decorator takes a string argspec argument, indicating what is expected
+for the arguments (aside from self).  They start with an optional mode,
+=+= means the argument must be ground (no variables), =-= means the
+argument must be a variable (as in datalog, starts with a capital letter),
+and no mode means it can be either.  After that is the name, followed by
+its kind.  The possible kinds are: =file=, for file references; =files=,
+for lists (recursively) of file references; =handle=, mostly used for
+interactive tools, and =value=, for anything else.
+
+The decorated functions should return an instance of one of the following
+classes:
+*** Success
+=Success= is used for predicates whose arguments are all ground, and
+indicates that the prdicate holds for those arguments.  If variables are
+involved, =Substitutions= should be used.
+#+BEGIN_SRC python
+return Success(self)
+#+END_SRC
+
+
+*** Failure
+=Failure= is used to indicate the predicate fails to hold.
+#+BEGIN_SRC python
+return Failure(self)
+#+END_SRC
+
+*** Substitutions
+=Substitutions= are used to both indicate success, and to bind the
+variables to the values for which the predicate holds.  Note that the
+wrapper may succeed for several possible bindings, and it needs to provide
+them all, following the semantics of datalog.  Thus this expects a list of
+bindings, which are a dictionary of the form =var: value=.
+
+The Tool class includes the =bindResult= method, which takes a variable
+and a value and creates a binding:
+#+BEGIN_SRC python
+return Substitutions(self, [self.bindResult(out, res)])
+#+END_SRC
+
+It takes an optional argument, =current=, that makes it easy to create a
+multiple variable binding, e.g.,
+#+BEGIN_SRC python
+s = self.bindResult(result, output[0])
+s1 = self.bindResult(model, ''.join(output[1:]), current=s)
+s2 = self.bindResult(model, ''.join(output2[1:]), current=s)
+return Substitutions(self, [s1, s2])
+#+END_SRC
+
+This gives two substitutions, that share the =result= value and differ on
+the =model= value.  (Note that =result= is not actually the name of the
+variable, its a python variable that evaluates to the variable name).
+
+=bindResult= creates ETB terms from values, so it is not necessary to use
+=mk_term=.  But if the value is already a term, =bindResult= does the
+right thing.  The only real reason to use =mk_term= is if you want to
+combine a non-term with a term.
+
+*** Lemmatta
+
+=Lemmatta= are used for dynamic goals.  This is illustrated in the =vc=
+demo, which looks for =verycomposite= numbers.  =verycomposite(n, m)=
+holds if =n=, =n+1=, ..., =n+m= are all =composite=, and =composite(n)=
+holds if =n= is not prime.  The datalog rule would have the form
+#+BEGIN_SRC prolog
+verycomposite(n, m) :- composite(n), composite(n+1), ..., composite(n+m)
+#+END_SRC
+
+but there is no way to state this.  Instead of this rule, we write
+=verycomposite= as a wrapper:
+#+BEGIN_SRC python
+    @Tool.predicate('+n: value, +m: value')
+    def verycomposite(self, n, m):
+        n = abs(int(n.val))
+        m = abs(int(m.val))
+        termlist = [ "composite(%s)" % i  for i in range(n, n + m)]
+        self.log.info("Lemmas: %s" % termlist)
+        return Lemmatta(self, [{}], [ termlist ])
+#+END_SRC
+=Lemmatta= takes two arguments, the first is a list of partial bindings
+for some of the arguments to the predicate (in this case it is the empty
+binding),  The second argument is the list of dynamic subgoals that need
+to be satisfied in order for the predicate to hold.  The number of
+bindings must match the numer of termlists; in this case there is one of
+each.
+
+*** Errors
+=Errors= provides a way to indicate something is wrong, more than failure
+of a goal.  For example, if one of the arguments to =verycomposite= is not
+a number, that's not a failure, it's an error.  =Errors= takes a list of
+strings as argument, allowing for more than one error to be reported from
+a wrapper.

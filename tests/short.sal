@@ -1,0 +1,25 @@
+short: context =
+begin
+  State: type = {ready, busy};
+
+  main: module =
+    begin
+      input request : boolean
+      output state : State
+      initialization 
+        state = ready
+      transition
+        state' in if (state = ready) and request then
+                    {busy}
+                  else 
+                    {ready, busy}
+                  endif
+    end;
+
+  th1: theorem main |- AG(request => AF(state = busy));
+
+  th2: theorem main |- G(request => F(state = busy));
+
+  th3: theorem main |- ltllib!responds_to(state = busy, request);
+
+END

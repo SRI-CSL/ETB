@@ -1,0 +1,1 @@
+make --makefile=Makefile_full ref

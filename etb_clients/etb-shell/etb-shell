@@ -1,0 +1,632 @@
+#!/usr/bin/env python
+
+import os, sys, platform, traceback
+import pprint
+import re
+import xmlrpclib
+import time
+
+import pyparsing
+
+sys.path.append(os.path.abspath(os.path.join(__file__,
+                                             '..', '..', '..', 'src')))
+
+import etb.terms
+from etbclientlib import ETBClient, ETBCmdLineClient
+
+def print_star_args(*args):
+    for count, thing in enumerate(args):
+        print '{0}. {1}'.format(count, thing)
+
+class Command(object):
+    '''
+    A class for ETB-shell commands.
+    It includes the pyparsing parser used to parse the command line.
+    '''
+    def __init__(self, cmd, *args):
+        self.cmd = cmd
+        self.args = args
+
+    @staticmethod
+    def fromParser(self, loc, toks):
+        return Command(*toks.asList())
+
+    @staticmethod
+    def expand_binding(bindings, args):
+        res = []
+        for a in args:
+            field_access = re.match('(.+)\.(.+)', a)
+            if field_access:
+                field = field_access.group(2)
+                fv = field_access.group(1)
+                if fv in bindings:
+                    try:
+                        na = bindings[fv].get(field)
+                    except:
+                        na = a
+                else:
+                    na = a
+            elif a in bindings:
+                na = bindings[a]
+            else:
+                na = a
+            res.append(na)
+        return res
+    
+    @staticmethod
+    def parse(bindings, str):
+        def parseDict(s, loc, toks):
+            print "+++ toks = {}".format(toks)
+            tlist = toks.asList()
+            return dict(zip(tlist[0::2], tlist[1::2]))
+        scst = pyparsing.Literal('\'').suppress() + \
+               pyparsing.Word(pyparsing.alphanums+'(), _.-/\\:') + \
+               pyparsing.Literal('\'').suppress()
+        scst.setParseAction(lambda s,loc,toks: '"'+''.join(toks)+'"')
+        dcst = pyparsing.Literal('"') + \
+               pyparsing.Word(pyparsing.alphanums+'_.-/\\:') + \
+               pyparsing.Literal('"')
+        dcst.setParseAction(lambda s,loc,toks: ''.join(toks))
+        cst = scst | dcst
+        name = pyparsing.Word(pyparsing.alphanums+'_.-/\\:')
+        name.setParseAction(lambda s,loc,toks: Command.expand_binding(bindings, toks))
+        nc = name | cst
+        listArg = pyparsing.Literal('[').suppress() + \
+                  pyparsing.delimitedList(nc) + \
+                  pyparsing.Literal(']').suppress()
+        listArg.setParseAction(lambda s,loc,toks: [toks.asList()])
+        de = cst + pyparsing.Literal(':').suppress() + nc
+        dictArg = pyparsing.Literal('{').suppress() + \
+                  pyparsing.delimitedList(de) + \
+                  pyparsing.Literal('}').suppress()
+        dictArg.setParseAction(parseDict)
+        arg = name | cst | listArg | dictArg
+        arguments = pyparsing.delimitedList(arg)
+        args = pyparsing.Literal('(').suppress() + arguments + pyparsing.Literal(')').suppress()
+        cmd = name + pyparsing.Optional(args)
+        print 'str = {0}'.format(str)
+        pcmd = cmd.parseString(str, parseAll=True)
+        print 'pcmd = {0}'.format(pcmd)
+        return pcmd
+
+# The *_command decorator are used to organize the online help in categories
+    
+def etb_command(method):
+    method._etb_command = True
+    return method
+
+def client_command(method):
+    method._client_command = True
+    return method
+
+def query_command(method):
+    method._query_command = True
+    return method
+
+def file_command(method):
+    method._file_command = True
+    return method
+
+class ETBShell(ETBCmdLineClient):
+
+    def __init__(self, descr):
+        self._root_dir = os.getcwd()
+        self._base_dir = '.'
+        self._remote_path = '/'
+        self._bindings = {}
+        self._queries = {}
+        #,  'derive', 'prove'
+        self._etb_cmds = set([ 'put_file', 'get_file', 'get_filehandle'])
+        
+        self._remote_etb_cmds = set(['all_claims', 'wait_query', 'query_answers'])
+        
+        self._remote_admin_cmds = set(['connect', 'link', 'tunnel', 'proxylink'])
+
+        ETBCmdLineClient.__init__(self, descr,
+                                  os.path.join(os.getcwd(), ".etb-shell-history"),
+                                  list(self.client_commands) + list(self.etb_commands) +
+                                  list(self._remote_etb_cmds) + list(self._remote_admin_cmds))
+
+    @property
+    def etb_commands(self):
+        """List of etb commands"""
+        all_methods = self.__class__.__dict__.values()
+        return self._etb_cmds.union(set(m.__name__ for \
+                                            m in all_methods if hasattr(m, '_etb_command')))
+
+    @property
+    def client_commands(self):
+        all_methods = self.__class__.__dict__.values()
+        return set(m.__name__ for \
+                         m in all_methods if hasattr(m, '_client_command'))
+
+    @property
+    def query_commands(self):
+        all_methods = self.__class__.__dict__.values()
+        return set(m.__name__ for \
+                         m in all_methods if hasattr(m, '_query_command'))
+
+    @property
+    def file_commands(self):
+        all_methods = self.__class__.__dict__.values()
+        return set(m.__name__ for \
+                         m in all_methods if hasattr(m, '_file_command'))
+    
+    @property
+    def remote_commands(self):
+        """List of remote ETB commands"""
+        return list(self.etb().system.listMethods())
+
+    def sort_commands(self):
+        verbose = False
+        current_etb_cmds = []
+        current_admin_cmds = []
+        for remote_fun in self.remote_commands:
+            if remote_fun in self._remote_etb_cmds:
+                if verbose: 
+                    print "Found %s in _remote_etb_cmds\n" %  remote_fun
+                current_etb_cmds.append(remote_fun)
+            elif remote_fun in self._remote_admin_cmds:
+                if verbose:
+                    print "Found %s in _remote_admin_cmds\n" %  remote_fun
+                current_admin_cmds.append(remote_fun)
+            else:
+                if verbose:
+                    print "Didn't find %s\n" %  remote_fun
+                pass
+        return (current_etb_cmds, current_admin_cmds)
+
+    @client_command
+    def help(self):
+        (etb_cmds, admin_cmds) = self.sort_commands()
+
+        print '\nAvailable commands'
+        print '==================\n'
+
+        print 'Client commands'
+        print '---------------'
+        for f in sorted(self.client_commands):
+            fun = self.__getattribute__(f)
+            doc = getattr(fun, '__doc__', '')
+            if doc:
+                print "{0:<25} {1}".format(f, doc)
+
+        print '\nQuery commands'
+        print '--------------'
+        for f in sorted(self.query_commands):
+            fun = self.__getattribute__(f)
+            print "{0:<25} {1}".format(f, getattr(fun, '__doc__', ''))
+
+        print '\nFile commands'
+        print '-------------'
+        for f in self.file_commands:
+            fun = self.__getattribute__(f)
+            print "{0:<25} {1}".format(f, getattr(fun, '__doc__', ''))
+            
+        print '\nAdmin commands'
+        print '--------------'
+        for remote_fun in admin_cmds:
+            hlp = self.etb().system.methodHelp(remote_fun)
+            hlp = str(hlp).splitlines()[0]
+            print "{0:<25} {1}".format(remote_fun, hlp)
+
+        print ''
+
+    @client_command
+    def quit(self):
+        """Quit the ETB shell."""
+        sys.exit(0)
+
+    @client_command
+    def load(self, file):
+        '''Load and execute an ETB script'''
+        if os.path.exists(file):
+            self.process_script(file, displayOutput=True)
+        else:
+            print '%s: no such file' % file
+
+    @client_command
+    def echo(self, *args):
+        '''Print its arguments'''
+        print ' '.join(list(args))
+        
+    ####### File commands
+
+    @file_command
+    def put_file(self, src, dst=None):
+        '''Put a file on the ETB'''
+        return ETBClient.put_file(self, src, dst)
+
+    @file_command
+    def get_file(self, src, dst=None):
+        '''Get a file from the ETB'''
+        return ETBClient.get_file(self, src, dst)
+
+    @file_command
+    def get_filehandle(self, path):
+        '''Get a handle to a file on the ETB, path is relative'''
+        return ETBClient.get_filehandle(self, path)
+    
+    @file_command
+    def lpwd(self):
+        '''Print the local (shell) working directory'''
+        print os.getcwd()
+
+    @file_command
+    def lcd(self, *args):
+        '''Change the local (shell) working directory'''
+        if len(args) == 1 and isinstance(args[0], str):
+            os.chdir(args[0])
+            self._root_dir = os.getcwd()
+        else:
+            print 'usage: lcd <dir>'
+
+    @file_command
+    def lls(self):
+        '''List files in the local (shell) working directory'''
+        ls = os.listdir(os.getcwd())
+        for f in ls:
+            if os.path.isdir(f):
+                print '%s/' % f
+            else:
+                print f
+
+    @file_command
+    def pwd(self):
+        '''Print the current ETB (server) working directory'''
+        print self._remote_path
+
+    @file_command
+    def cd(self, path):
+        '''Change the ETB (server) working directory'''
+        p = os.path.normpath(os.path.join(self._remote_path, path))
+        if self.etb().ls('.' + p):
+            self._remote_path = p
+        else:
+            print 'Invalid path: %s' % p
+
+    @etb_command
+    def ls(self):
+        '''List files in the ETB (server) working directory'''
+        output = self.etb().ls('.')
+        # output is [dirs, uptodate, outdated, notingit]
+        for d in output[0]:
+            print d
+        for f in output[1]:
+            print f
+        for f in output[2]:
+            print f
+        for f in output[3]:
+            print f
+        
+    ########## Query commands
+        
+#    @query_command
+    def derive(self, query):
+        '''Create a new derivation query'''
+        qid = self.etb().query(query)
+        self._queries[qid] = 'derive(%s)' % query
+        return qid
+    
+#    @query_command
+#    def prove(self, query):
+#        '''Create a new proof query'''
+#        qid = self.etb().proof(query)
+#        self._queries[qid] = 'prove(%s)' % query
+#        return qid
+
+       
+#    @query_command
+#    def query_view(self, query):
+#        '''Display the current state of the query'''
+#        dot_file = os.path.abspath('_etb_shell_query.dot')
+#        self.etb().query_dot_file(query, dot_file)
+#        os.system('dot -Tsvg -o _etb_shell_query.svg %s' % dot_file)
+#        self.dot_open('_etb_shell_query.svg')
+
+#    @query_command
+#    def query_derivation(self, query):
+#        '''Display a derivation produced by the query'''
+#        dot_file = os.path.abspath('_etb_shell_derivation.dot')
+#        out = self.etb().query_derivation(query, dot_file)
+#        if out:
+#            os.system('dot -Tsvg -o _etb_shell_derivation.svg %s' % dot_file)
+#            self.dot_open('_etb_shell_derivation.svg')
+#        else:
+#            print 'no derivation found for query.'
+
+#    @query_command
+#    def query_proof(self, query):
+#        '''Display a proof produced by the query'''
+#        dot_file = os.path.abspath('_etb_shell_proof.dot')
+#        out = self.etb().query_proof(query, dot_file)
+#        if out:
+#            os.system('dot -Tsvg -o _etb_shell_proof.svg %s' % dot_file)
+#            self.dot_open('_etb_shell_proof.svg')
+#        else:
+#            print 'no proof found.'
+
+        
+    @query_command
+    def queries(self):
+        """queries: print the id and status of all the queries on the ETB"""
+        q_active = self.etb().active_queries()
+        q_done = self.etb().done_queries()
+        print '\nQueries'
+        print '======='
+        if q_active:
+            print '\nActive'
+            print '------'
+            for q in q_active:
+                if q in self._queries:
+                    print '  %s    %s' % (q, self._queries[q])
+                else:
+                    print '  %s' % q
+        if q_done:
+            print '\nCompleted'
+            print '---------'
+            for q in q_done:
+                if q in self._queries:
+                    print '  %s    %s' % (q, self._queries[q])
+                else:
+                    print '  %s' % q
+        print ''
+        
+    def translate_answers(self, output):
+        #print('translate_answers: output = %s of type %s' % (output, type(output)))
+        substs = etb.terms.loads(output)
+        substs = [ etb.terms.loads(s) for s in substs ]
+        if len(substs) == 1:
+            return substs[0]
+        else:
+            return substs
+        
+    @query_command
+    def query_answers(self, q):
+        '''query_answers(q): print the answers to a query q'''
+        output = self.etb().query_answers(q)
+        answers = etb.terms.loads(output)
+        print '\nAnswers for query %s' % q
+        print '=================================================='
+        if answers:
+            for s in answers:
+                print etb.terms.loads(s)
+        else:
+            print '(no answer)'
+        print ''
+        return self.translate_answers(output)
+            
+
+    def print_claims(self, claims, title):
+        if len(claims) == 1:
+            title = '\nClaim %s' % title
+        else:
+            title = '\nClaims %s' % title
+        subtitle = '=' * (len(title)-1)
+        print '%s\n%s' % (title, subtitle)
+        for c in claims:
+            print '  %s' % c
+        print ''
+        
+
+    ## Ian beeds to fix these so that they 1. Replace the old by the new 2. Make sure they get documented by "help"
+    ## Stijn: BEGIN checked commands for new engine3
+    @query_command
+    def claims(self, q):
+        '''claims(q): show claims established by query q'''
+        cs = etb.terms.loads(self.etb().query_claims(q))
+        self.print_claims(cs, 'established by query %s' % q)
+        if len(cs) == 1:
+            return etb.terms.dumps(cs[0])
+        else:
+            return [ etb.terms.dumps(c) for c in cs ]
+
+    @query_command
+    def all_claims(self):
+        """all_claims: Print all the claims established so far"""
+        cs = etb.terms.loads(self.etb().get_all_claims())
+        self.print_claims(cs, 'established so far')
+
+    @query_command
+    def explanation(self, query):
+        """explanation(q): show graphically the status of q"""
+        files = self.etb().query_explanation(query)
+        if files:
+            for f in files: 
+                self.dot_open(str("./etb_git/" + f))
+        else:
+            print 'no explanations found.'
+
+    @query_command
+    def show(self, query):
+        """show(q): show graphically the goal dependencies of q"""
+        file = self.etb().query_show_goal_dependencies(query)
+        if file:
+            self.dot_open(str("./etb_git/" + file ))
+        else:
+            print 'no goal dependencies found.'
+
+    def dot_open(self, file):
+        s = platform.system()
+        if s == 'Linux':
+            cmd = 'xdg-open'
+        elif s == 'Darwin':
+            cmd = 'open'
+        else:
+            print 'Warning: don''t know how to view file on %s' % s
+            return        
+        os.system('%s %s' % (cmd, file))
+
+    @query_command
+    def query_wait(self, q):
+        '''query_wait(q): wait for the query q to complete and return its answers'''
+        self.etb().query_wait(q)
+        output = self.etb().query_answers(q)
+        res = self.translate_answers(output)
+        if res == []:
+            self.errors(q)
+        return res
+
+    @query_command
+    def errors(self, q):
+        '''errors(q): print error claims produced during the query q'''
+        output = self.etb().query_claims(q)
+        answers = etb.terms.loads(output)
+        answers = [ a for a in answers if isinstance(a, etb.terms.Claim) and a.literal.first_symbol() == etb.terms.mk_term('error') ]
+        if len(answers) > 0:
+            print '\nErrors:'
+            print '======'
+            for a in answers:
+                print ''
+                args = a.get_args()
+                print args[0]
+                print '-' * len(str(args[0]))
+                for arg in args[1:]:
+                    print arg
+
+    @etb_command
+    def close(self):
+        return self.etb().query_close()
+
+    @etb_command
+    def complete(self):
+        return self.etb().query_complete()
+
+    @etb_command
+    def is_completed(self, query):
+        return self.etb().query_is_completed(query)
+
+
+    @etb_command
+    def wait_for_claims(self, query):
+        start = time.time()
+        self.etb().query_wait(query)
+        end = time.time()
+        diff = end - start
+        print "Claims calculated in ", diff, " seconds..."
+        self.claims(query)
+
+       
+    ## Stijn: END checked commands for new engine3
+
+
+
+
+#
+#
+#    @query_command
+#    def query_claims(self, q):
+#        '''Print the claims established by query'''
+#        return self.claims(q)
+        
+#    @etb_command
+#    def query_all_claims(self, q):
+#        return self.all_claims(q)
+
+            
+
+    #### The eval loop
+    
+    def parse_cmd(self, command):
+        has_binding = re.match('([a-zA-Z][a-zA-Z0-9_]*)[ ]*=(.*)$', command)
+        if has_binding:
+            binding = has_binding.group(1)
+            command = has_binding.group(2).strip(' ')
+        else:
+            binding = None
+        cmd = Command.parse(self._bindings, command)
+        return (binding, cmd[0], cmd[1:])
+
+    def process(self, command, displayOutput=False): 
+        if not command or command[0] == '#':
+            return
+
+        (binding, cmd, args) = self.parse_cmd(command)
+
+        #print '\tbinding = %s\n\tcmd = %s\n\targs = %s' % (binding, cmd, args)
+
+        if not cmd:
+            return
+
+        if cmd == 'prove' or cmd == 'derive' and len(args) == 1:
+            (_, p, pargs) = self.parse_cmd(args[0])
+            args = [ '%s(%s)' % (p, ', '.join(pargs)) ]
+
+        if cmd in self.client_commands or cmd in self.etb_commands or cmd in self.query_commands or cmd in self.file_commands:
+            output = self.__getattribute__(cmd)(*args)
+            if binding is not None :
+                self._bindings[binding] = output
+            if displayOutput:
+                print output
+                
+        elif cmd in self.remote_commands:
+            try:
+                fun = getattr(self.etb(), cmd, lambda *args: None)
+                #print_star_args(*args)
+                output = fun(*args)
+                if binding is not None :
+                    self._bindings[binding] = output
+                elif displayOutput:
+                    pprint.pprint(output)
+            except Exception as e:
+                print "Exception occured:", e
+                traceback.print_exc(file=sys.stderr)
+        else:
+            if len(args) > 0:
+                output = self.derive('%s(%s)' % (cmd, ','.join([ str(a) for a in args])))
+            else:
+                output = self.derive('%s' % cmd)
+            if binding is not None :
+                self._bindings[binding] = output
+            elif displayOutput:
+                print output
+        
+    def interact(self):
+        while True:
+            try:
+                command = raw_input('%s > ' % self._remote_path).strip()
+                self.process(command)
+            except EOFError:
+                print ""
+            except xmlrpclib.Error as e:
+                print "error:", e
+            except Exception as e:
+                print "oops!", e
+                traceback.print_exc(file=sys.stderr)
+
+    def process_script(self, script, displayOutput=False):
+        with open(script, 'r') as f:
+            for line in f:
+                try:
+                    command = line.strip('\n').strip()
+                    self.process(command, displayOutput)
+                except EOFError:
+                    print ""
+                except xmlrpclib.Error as e:
+                    print "error:", e
+                except Exception as e:
+                    print "oops!", e
+                    traceback.print_exc(file=sys.stderr)
+def main():
+    try:
+        s = ETBShell('ETB Shell')
+        s.parser().add_argument('--batch', action='store_true',
+                                default=False)
+        s.parser().add_argument('SCRIPT', nargs='?', help='ETB script')
+        if s.args().batch:
+            if s.args().SCRIPT:
+                s.process(s.args().SCRIPT, displayOutput=False)
+            else:
+                for line in sys.stdin:
+                    s.process(line, displayOutput=False)
+        elif s.args().SCRIPT:
+            s.process_script(s.args().SCRIPT)
+        else:
+            s.interact()
+    except (KeyboardInterrupt):
+        s._history.save()
+        print '' # make sure we get a newline in there
+    sys.exit(0)
+
+if __name__ == '__main__':
+    main()

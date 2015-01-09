@@ -1,0 +1,30 @@
+#+OPTIONS: toc:nil
+#+TITLE: ETB Configuration
+
+There are two primary executable files associated with the ETB: the ETB
+daemon =etbd=, and the ETB shell =etbsh=.  Both of these can be configured
+either from a configuration file or by arguments.  Configuration files are
+in INI format, with =[etb]= and =[etbsh]= sections.  The files are usually
+named =etb_conf.ini= and read first from the user home directory, then
+from the local directory.  Command line arguments are then read, and
+override the configuration file parameters.  Below we give the names of
+the arguments; the long forms are also the names of the configuration file
+parameters, but with hyphen replaced by underscore.  For example, a
+configuration file with contents
+#+BEGIN_SRC config
+[etb]
+wrappers_dir = wrappers
+rule_files = rules1 rules2
+#+END_SRC
+can be given on the command line as
+#+BEGIN_SRC shell
+etbsh --wrappers-dir="wrappers" --rule_files="rules1 rules2"
+#+END_SRC
+
+Normally, the ETB shell is used to run an ETB daemon, so the shell may be
+invoked with arguments for both, 
+
+* ETB Daemon
+
+The ETB daemon =etbd= is the executable associated with an ETB node.
+It has a number of parameters

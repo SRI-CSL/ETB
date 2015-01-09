@@ -1,0 +1,6 @@
+(define a::bool)
+(define b::bool)
+(define c::bool)
+
+(assert (or (and a b c) (and (not a) (or (not b) c))))
+(check)

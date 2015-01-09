@@ -1,0 +1,233 @@
+\documentclass{report}
+\usepackage{standalone}
+
+\usepackage{minted}
+
+\newminted{python}{frame=lines}
+\newminted{bash}{frame=lines}
+\usepackage{tikz}
+\usetikzlibrary{patterns}
+\usepackage{hyperref}
+\long\def\omitthis#1{\relax}
+
+\title{ETB Guide}
+\author{Sam Owre}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+
+\begin{abstract}
+
+This document is a guide to the use of the \textit{Evidential Tool Bus}
+(ETB).  The ETB is used to create and maintain eveidence-based arguments,
+for example, for assurance cases.  The arguments are given in a variant of
+Datalog, but in addition to Datalog facts, semantic attachments may be
+given in the form of \emph{wrappers} to invoke external tools and create
+facts.  This guide is primarily for those wanting to run the ETB and
+create their own rules and wrappers.  For more on the theoretical side of
+ETB, see~\cite{DBLP:conf/vmcai/CruanesHOS13,
+DBLP:conf/birthday/CruanesHMOS14}.
+
+\end{abstract}
+
+%\section{Introduction}
+
+\chapter{Overview}
+
+The Evidential Tool Bus (ETB) allows different tools communicate through a
+distributed \emph{tool bus}, using \emph{rules} to generate
+\emph{evidence} in support of \emph{claims}.  The idea is that the rules,
+evidence, and claims should provide a convincing argument to a skeptical
+observer.  But beyond support for argumentation, the rules and wrappers
+can form a workflow, allowing for the argument to be developed automatically, 
+and rerunning the workflow as changes require, or simply to satisfy a
+skeptic.
+
+Almost any tool may be supported by the ETB, as long as a wrapper may be
+written for it.\footnote{Some tools that solely support a graphic API may be
+difficult, though even in this case there are usually workarounds.}  The
+ETB was originally designed with formal methods tools (provers,
+modelcheckers, SMT solvers, etc.) in mind, but has been extended to
+include any tool.  Note that wrappers may be written that simply collect
+emails, digital signatures, review notes, etc., so the notion of a tool is
+fairly broad.  Wrappers are loaded when ETB starts up.
+
+The evidence is expected to be in digital form, though this could include
+pictures, digital signatures, etc., as stand-ins for physical objects.
+When claims are made, e.g., that a particular file has been proved, the
+file is the evidence for the claim, and it is copied into a local ETB (Git)
+repository.  The actual claim then references the file by both the name
+and its SHA-1 hash, which together make a \emph{file handle}.  This means
+that as changes occur to files in the system, it is easily determined
+which claims need to be updated.  Note the old claims are not invalid,
+only valid for a different version of the file.
+
+Rules are written in a form of Datalog.  When an ETB node starts up, it
+loads the rules and wrappers, and waits for a client to issue a
+\emph{query} (also known as a \emph{goal}).  Like Datalog, the answer to a
+query is expected to be finite, and all the answers are returned at once.
+The body (subgoals) of a matching rule is processed from left to right,
+and matching variable bindings are collected.  Any subgoal that is
+satisfied creates a corresponding claim, which is stored in the claims
+table.  If the body is completed, the head is considered to have
+succeeded, and all the corresponding instances are added to the claims
+table.
+
+The datalog term language has been extended to include JSON forms, in
+particular, numbers, strings, booleans, maps (also known as objects,
+records, or dictionaries), and arrays.  A file handle is actually a map,
+with \texttt{file} and \texttt{sha1} fields.
+
+ETB can run on a single machine, or it can run in a distributed framework.
+The simplest runs on a local area network, ETB daemons are run on several
+machines, then connected together through XML-RPC, forming a completely
+connected network.  Each node has its own rules and wrappers; the
+names of the predicates associated with wrappers are shared among all the
+ETB nodes.  When processing a query, if it is found to match a wrapper
+predicate that is handled by another ETB node, the query is sent to it,
+and the answers, along with the evidence, are returned.  This is useful,
+for example, when connecting tools together that run on different
+platforms.
+
+In developing a workflow for the ETB, it is best to start by deciding what
+\emph{claims} you want to make to support your arguments.  In an ideal
+world, all arguments are purely deductive and supported by proof.  But
+real assurance cases require such issues as hazard analysis, probabilistic
+arguments, test results, human factors analysis, etc.  All of these form
+evidence that, e.g., a plane is \emph{safe} to fly, and it is this kind of
+argument that the ETB was developed for.  See~\ref{Rushby13:safecomp} for
+more discussion of these issues.
+
+In the following we start by walking through some simple tutorial
+examples, showing how to run the ETB, and how to create rules and
+wrappers.  The last few chapters are a reference guide to the
+language, writing wrappers, and writing ETB clients.
+
+%\input{etb_install}
+\chapter{Getting Started with ETB}
+\input{etb_tutorial}
+\input{etb_setup}
+%\input{etbd}
+%\input{etbsh}
+%\input{etb_language}
+\chapter{ETB Wrappers}
+\input{etb_wrappers}
+%\input{etb_connect}
+\chapter{ETB Clients}
+\input{etb_clients}
+\chapter{ETB Configuration}
+\input{etb_config}
+
+\section{}
+If you installed ETB as described in \ref{install}, you should have
+\texttt{etbd} and \texttt{etbsh} in your path.  In practice, the easiest
+thing to do is to start from a directory with an \texttt{etb\_conf.ini}
+file in it and run \texttt{etbsh} with a port, e.g.,
+\begin{bashcode}
+etbsh -p 12345 --etb
+\end{bashcode}
+The \texttt{--etb} flag indicates that the daemon should be started as a
+subprocess.
+The following subsections describe the ETB daemon and shell in more detail. 
+
+\subsection{The \texttt{etbd} daemon}
+The daemon the code that implements an ETB node; a workflow is defined by
+interconnected ETB nodes, each with a set of rules and wrappers that
+define a part of the overall workflow.
+
+The \texttt{etbd} command starts an ETB node, which then
+\begin{itemize}
+\item reads a configuration file
+\item loads rules and wrappers files
+\item loads a file containing earlier claims and derivations
+\item changes directory to the specified Git working repository
+\item waits for messages from other nodes or clients
+\end{itemize}
+Several nodes may be running on a single computer, or across a network.
+However, it is not a good idea to run two nodes at the same time that
+could overwrite the same claims file.
+
+It is important to understand that wrappers are run in the Git working
+directory, so any input files need to be introduced from outside, either
+from another node or from a client.  Most often \texttt{etbd} is started
+in a directory that contains an \texttt{etb\_conf.ini} file, a
+\texttt{wrapper} subdirectory, any number of rules files, and an
+\texttt{etb\_git} subdirectory.  In this case, the defaults work except
+for the \texttt{rule\_files} and \texttt{port}.
+\begin{bashcode}
+[etb]
+port = 26532
+wrappers_dir = wrappers
+logic_file = logic.json.bz2
+rule_files =
+git_dir = etb_git
+cron_period = 25
+\end{bashcode}
+The \texttt{etbd} also takes arguments
+\begin{description}
+\item[\texttt{-h}, \texttt{--help}] show a help message
+\item[\texttt{-d}, \texttt{--debuglevel}] set the debug level, one of
+\texttt{debug}, \texttt{info}, \texttt{warning}, \texttt{error}, or
+\texttt{critical}.  Default is \texttt{info}.
+\item[\texttt{--log}] a file to capture log messages; otherwise log
+messages go to the terminal (i.e., stdout and stderr).
+\item[\texttt{--config}, \texttt{-cf}] the config file to use
+\item[\texttt{--port}, \texttt{-p}] the port to use
+\end{description}
+These arguments override the corresponding configuration file arguments.
+
+\subsection{The \texttt{etbsh} shell}
+The \texttt{etbsh} is a shell client that allows for interaction with an
+ETB network.  It can also start up an \texttt{etbd} daemon and connect to
+it, as shown above.  The \texttt{etbsh} takes arguments
+\begin{description}
+\item[\texttt{-h}, \texttt{--help}] show a help message
+\item[\texttt{--host}] an ETB host URL, default localhost
+\item[\texttt{--port}, \texttt{-p}] the port to use
+\item[\texttt{--name}, \texttt{-n}] an etb name (used in proxying)
+\item[\texttt{--batch}] run in batch mode, using stdin or a SCRIPT
+\item[\texttt{--etb}] run \texttt{etbd}, from the specified directory if
+given, else the current directory
+\item[SCRIPT] is an \texttt{etbsh} load file, see below.
+\end{description}
+
+The \texttt{etbsh} shell takes a number of commands:
+\begin{description}
+\item[\texttt{help} [\emph{command}]]{Help for the given \emph{command},
+or a summary of all commands if no \emph{command} given.}
+\end{description}
+
+
+\section{ETB Language}
+ETB is best viewed as an extension of Datalog.  An ETB program consists of
+\emph{sentences}, and the main results are \emph{claims} that are kept in
+the claims table.  In order to increase the expressiveness, ETB uses a
+JSON-like extension.
+
+\subsection{Lexical}
+The basic lexical tokens are identifiers, strings, and numbers.
+Identifiers are any sequence of characters, except for space, \texttt{=},
+colon, period, question mark, comma, quote marks (single, double, and
+back), tilde (\texttt{~}, percent \texttt{\%} and various brackets
+\texttt{[]()\{\}}.  Alternatively, any sequence of characters within
+single quotes forms an identifier, with the usual backslash escape to
+include single quotes or backslash.  Strings are any sequence of
+characters within double quotes, with the backslash convention.  Numbers
+are integers or floating point, with 
+
+Identifiers are either variables or constants.  An identifier that starts
+with an upper case letter is a variable, otherwise it is a constant.
+Strings are enclosed in double quotes.
+
+
+
+\bibliographystyle{plain}
+\bibliography{etb}
+
+\end{document}
+
+%% Local Variables:
+%% TeX-command-extra-options: "-shell-escape"
+%% End:

@@ -1,0 +1,9 @@
+% -*- prolog -*-
+
+black(0, 1).
+white(1, 2).
+black(1, 0).
+blackpath(X, Y) :- black(X, Y).
+blackpath(X, Y) :- black(X, Z), whitepath(Z, Y).
+whitepath(X, Y) :- white(X, Y).
+whitepath(X, Y) :- white(X, Z), blackpath(Z, Y).

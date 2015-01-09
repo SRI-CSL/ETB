@@ -1,0 +1,9 @@
+% -*- prolog -*-
+
+sat(F, M) :- yices(F, S, M), equal(S, sat).
+unsat(F) :- yices(F, S, M), equal(S, unsat).
+
+allsat(F, Answers) :- sat(F, M), 
+                      negateModel(F, M, NewF), allsat(NewF, T), 
+                      cons(M, T, Answers).
+allsat(F, Answers) :- unsat(F), nil(Answers).

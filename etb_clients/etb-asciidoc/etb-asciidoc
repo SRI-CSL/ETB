@@ -1,0 +1,29 @@
+#!/usr/bin/env python
+
+from etbclientlib import ETBClient
+import sys, os, re
+
+try:
+    # We create an ETB client, and add a command line argument for the
+    # file to be translated
+    c = ETBClient('Asciidoc over the ETB')
+    c.parser().add_argument('FILE', help='asciidoc file')
+
+    # Put the file on the ETB
+    input_file = c.put_file(c.args().FILE, '/' + os.path.basename(c.args().FILE))
+
+    # Do the query and get an answer
+    answers = c.query_and_wait_answer('asciidoc("", "%s", Html)' % input_file)
+
+    # Check for errors
+    c.raise_on_error_claims(answers, { 'unknown predicate: asciidoc' :
+                                       'This ETB does not support asciidoc'})
+
+    # Get the output file from the ETB
+    c.get_file(answers['substs'][0]['Html']['file'])
+
+except Exception as e:
+    print e
+    sys.exit(1)
+
+sys.exit(0)

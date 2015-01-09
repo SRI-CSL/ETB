@@ -1,0 +1,20 @@
+% -*- prolog -*-
+
+allsat(F, Answers) :- yicesStart(Session0),
+	              yicesIncludeFile(Session0, F, Session1),
+		      allsat_enum(Session1, Answers).
+
+allsat_enum(Session, Answers) :- yicesCheck(Session, Session1, Result),
+	                         allsat_iter(Session1, Result, Answers).
+
+allsat_iter(Session, Result, Answers) :- equal(Result, 'sat'),
+				         yicesModel(Session, Model),
+				         yicesAssertNegation(Session, Model, Session1),
+				         allsat_enum(Session1, Answers1),
+				         cons(Model, Answers1, Answers).
+
+allsat_iter(Session, Result, Answers) :- equal(Result, 'unsat'),
+	                                 yicesClose(Session),
+				         nil(Answers).
+
+
