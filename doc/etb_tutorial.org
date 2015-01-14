@@ -16,9 +16,19 @@ Once installed, =etbsh= and =etbd= should be in your path, though you may
 need to run =hash -r= (for Bash) or its equivalent from your shell to see
 them.
 
-** ETB shell
-The easiest way to run the ETB is with the shell =etbsh=.
-As described in section 
+* ETB shell
+The easiest way to run the ETB is to start =etbsh= in a directory
+containing rules and/or wrappers (without rules or wrapper it will start,
+but won't have much to do, unless connected to another ETB server).
+
+The shell starts up an ETB server, which loads the rules and wrappers, if
+any, and waits for commands from =etbsh=, or other connected clients or
+servers.
+
+After the ETB server has initialized, =etbsh= displays a prompt, waiting
+for a command.  You can see the available commands by typing =help=.  When
+finished, type =quit= (or =C-z= for Windows, =C-d= otherwise).
+
 
 * Datalog rules
 ETB is essentially a datalog engine.  This means you can write datalog
