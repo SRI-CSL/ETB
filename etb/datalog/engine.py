@@ -68,6 +68,10 @@ class Engine(object):
         :members:
 
             - `self.log`: the object used for logging Engine related messages
+            - `self.facts`: the facts read from rules files, so they can be
+               displayed by clients
+            - `self.rules`: the rules read from rules files, so they can be
+               displayed by clients
             - `self.term_factory`: a :class:`etb.datalog.model.TermFactory`
               object. This object takes care of bridging external
               :class:`etb.term` objects to the internal data format used by the
@@ -110,6 +114,9 @@ class Engine(object):
         """
 
         self.log = logging.getLogger('etb.datalog.engine')
+
+        self.facts = {}
+        self.rules = {}
 
         # The term_factory is used to figure out translations between
         # terms and the internal data structure.
@@ -473,6 +480,8 @@ class Engine(object):
             self.log.error("parse error while reading %s: %s",
                            rule_file, e)
             return
+        self.facts[rule_file] = []
+        self.rules[rule_file] = []
         facts = [obj for obj in statements if isinstance(obj, terms.Literal)]
         # parse some facts
         axiom_num = 0
@@ -481,6 +490,7 @@ class Engine(object):
             assert isinstance(fact, terms.Literal), 'fact is not Literal'
             axiom_num += 1
             fact_rule = terms.mk_fact_rule(fact)
+            self.facts[rule_file].append(fact)
             self.add_rule(fact_rule, model.create_axiom_explanation())
             # self.add_claim(terms.Claim(fact, model.create_axiom_explanation()))
         # parse some rules
@@ -488,12 +498,14 @@ class Engine(object):
         rules = [obj for obj in statements if isinstance(obj, terms.DerivationRule)]
         for rule in rules:
             rules_num += 1
+            self.rules[rule_file].append(rule)
             self.add_rule(rule, model.create_axiom_explanation())
         # parse some inference rules
         inf_rules_num = 0
         rules = [obj for obj in statements if isinstance(obj, terms.InferenceRule)]
         for rule in rules:
             inf_rules_num += 1
+            self.rules[rule_file].append(rule)
             self.add_rule(rule, model.create_axiom_explanation())
 
         self.log.debug('Parsed rules file %s:', os.path.abspath(rule_file))
@@ -1197,9 +1209,9 @@ class Engine(object):
                         if all_claims[i].literal == claim:
                             fnd = True
                             aclaims.append(i)
-                if not fnd:
-                    self.log.error('save_logic_file: claim {0} from annotation for {1} not in all_claims'
-                                   .format(claim, goal))
+                    if not fnd:
+                        self.log.error('save_logic_file: claim {0} from annotation for {1} not in all_claims'
+                                       .format(claim, goal))
                 annot = {'kind': ann.kind, 'claims': aclaims, 'status': ann.status}
                 annotations.append(annot)
             else:
@@ -1278,4 +1290,3 @@ class InterpretStateLessThan():
     # Added for integration in etb
     def predicates(self):
         return {}
-

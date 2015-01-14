@@ -246,7 +246,7 @@ class TestEngine(unittest.TestCase):
     def test_query_ocaml1(self):
         self.engine.clear()
         X = terms.mk_var("X")
-        self.engine.load_rules('./etb/datalog/test/logic_programs/graph10.lp')
+        self.engine.load_rules('../etb/datalog/test/logic_programs/graph10.lp')
         goal = parser.parse_literal('increasing(3, X)')
         inc1 = parser.parse_literal('increasing(3,4)')
         inc2 = parser.parse_literal('increasing(3,5)')
@@ -256,7 +256,9 @@ class TestEngine(unittest.TestCase):
         inc6 = parser.parse_literal('increasing(3,9)')
         inc7 = parser.parse_literal('increasing(3,10)')
         self.engine.add_goal(goal)
+        
         desired_results = [inc1, inc2, inc3, inc4, inc5, inc6, inc7]
+        print 'self.engine.get_claims_matching_goal(goal) = {0}'.format(self.engine.get_claims_matching_goal(goal))
         self.assertItemsEqual(desired_results, map(lambda claim: claim.literal, self.engine.get_claims_matching_goal(goal)))
 
     def test_check_stuck_goals(self):

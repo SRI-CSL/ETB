@@ -1110,17 +1110,13 @@ class Networking(SocketServer.ThreadingMixIn,
     def get_rules(self):
         """Get the list of rules on this node.
         This returns a more readable form of the rules."""
-        rules = list(self.etb.engine.rules())
-        str = terms.dumps_readably(rules)
-        return terms.loads(str)
+        return terms.dumps(self.etb.engine.rules)
 
     @_export
-    def dump_rules(self):
-        """Get the list of rules currently used on this node.
-        It returns a JSON-encoded list of Clauses.
-        """
-        rules = list(self.etb.engine.rules())
-        return terms.dumps(rules)
+    def get_facts(self):
+        """Get the list of facts on this node.
+        This returns a more readable form of the facts."""
+        return terms.dumps(self.etb.engine.facts)
 
     @_export
     def etb_dir(self):

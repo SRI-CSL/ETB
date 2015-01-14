@@ -205,7 +205,7 @@ class ETBShell(ETBCmdLineClient):
         self._bindings = {}
         self._queries = {}
         #,  'query', 'prove'
-        self._etb_cmds = set(['put_file', 'get_file', 'get_filehandle', 'predicates'])
+        self._etb_cmds = set(['put_file', 'get_file', 'get_filehandle', 'predicates', 'rules', 'facts'])
         
         self._remote_etb_cmds = set(['find_claims', 'all_claims', 'wait_query',
                                      'query_answers'])
@@ -466,6 +466,25 @@ class ETBShell(ETBCmdLineClient):
             preds = self.etb().get_all_tool_predicates()
         for pstr in sorted(preds):
             print pstr
+
+    @etb_command
+    def rules(self):
+        '''List the rules'''
+        rules_dict = terms.loads(self.etb().get_rules())
+        for file, rules in rules_dict.iteritems():
+            print 'Rules from file {0}:\n---------'.format(file)
+            for rule in rules:
+                print '{0}'.format(rule)
+
+    @etb_command
+    def facts(self, all=False):
+        '''List the facts'''
+        facts_dict = terms.loads(self.etb().get_facts())
+        print 'facts_dict = {0}'.format(facts_dict)
+        for file, facts in facts_dict.iteritems():
+            print 'Facts from file {0}:\n---------'.format(file)
+            for fact in facts:
+                print '{0}.'.format(fact)
 
 
     ########## Query commands
