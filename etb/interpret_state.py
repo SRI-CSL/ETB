@@ -340,10 +340,13 @@ class InterpretState(object):
             Not loading rules yet!
 
         """
+        # First load builtins
+        self.log.info('Loading builtin wrappers')
+        self._import_wrapper('etb.wrappers.builtins')
         wrapper_dir = os.path.abspath('wrappers')
-        self.log.info("Loading wrappers from directory '{0}'"
-                      .format(wrapper_dir))
         if os.path.isdir(wrapper_dir):
+            self.log.info("Loading wrappers from directory '{0}'"
+                          .format(wrapper_dir))
             sys.path.insert(0,wrapper_dir)
             files = os.listdir(wrapper_dir)
             for f in files:
@@ -352,7 +355,7 @@ class InterpretState(object):
                 mod_name, _ = os.path.splitext(f)
                 self._import_wrapper(mod_name)
         else:
-            self.log.error('Not a valid directory: %s' % wrapper_dir)
+            self.log.info('No wrapper directory specified')
 
     def is_interpreted(self, goal):
         """Checks whether the goal is interpreted."""

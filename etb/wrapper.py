@@ -238,7 +238,6 @@ class InteractiveTool(Tool):
         """
         Initially, there are no sessions and the next id is 0
         """
-        print('Initializing InteractiveTool')
         Tool.__init__(self, etb)
         self._sessions = {}
         self._id = 0
@@ -524,62 +523,25 @@ class Substitutions(Result):
 def parselemma(q): 
     if isinstance(q, terms.Literal):
         return q
+    elif isinstance(q, basestring):
+        return parser.parse_literal(q)
     else:
-        t = parser.parse(q, 'literal')
-        assert isinstance(t, terms.Literal), '{0} is not a Literal'.format(t)
-        return t
+        raise ValueError('Lemmata subgoal: {0} must be a literal or string'
+                         .format(q))
 
 def parselemmata(l):
+    """ Parses the subgoal list of Lemmata object returned by a wrapper
+    l can be a list of lists of literals, a list of literals, or a literal
+    where literal can be a terms.Literal or a string that parses to a terms.Literal
+    The return from this is a list of list of literals.
+    """
     if isinstance(l, list):
-        return [ parselemma(q) for q in l ] 
+        if all(isinstance(e, list) for e in l):
+            return [[parselemmata(q) for q in ll] for ll in l]
+        else:
+            return [[parselemma(q) for q in l]]
     else:
-        return []
-
-# class Queries(Substitutions):
-#     """
-#     The old api way of returning queries. Note that returning queries
-#     precludes returning claims. From a goal G we can return
-
-#     Queries(tool, slist, qlist)
-
-#     where:
-
-#     slist should be a substitution list:
-    
-#     [s0, s1, ... , sN]
-    
-#     - the substitution can either be a dict or a terms.Subst object, whichever is more 
-#     convenient.
-
-#     qlist should be a list of terms: 
-
-#     [q0, q1, ... , qM]
-    
-#     - terms can either be string representations, or actual term objects, whichever is more 
-#     convenient.
-    
-#     This has the effect of adding the N x M rules:
-
-#     si(G) :- si(qj)
-    
-#     for each i in 0 ... N and j in 0 ... M.
-    
-#     """
-#     def __init__(self, tool, substitutions, queries):
-#         Substitutions.__init__(self, tool, substitutions)
-#         self.queries = queries
-        
-#     def get_claims(self, goal):
-#         return []
- 
-#     def get_pending_rules(self, goal):
-#         pending_rules = []
-#         for q in self.queries :
-#             q = parselemma(q)
-#             for s in self.substitutions :
-#                 pending_rules.append(terms.InferenceRule(s(goal), [s(q)], temp=True))
-#         return pending_rules
-     
+        return [[parselemma(l)]]
 
 
 class Lemmata(Substitutions):
@@ -604,17 +566,16 @@ class Lemmata(Substitutions):
         to the system for i in 0 ... N.
     """
         Substitutions.__init__(self, tool, substitutions)
-        if not isinstance(lemmatas, list):
-            raise Exception('Lemmata: lemmatas MUST be a list')
+        lemmata_list = parselemmata(lemmatas)
         if isinstance(substitutions, dict):
-            lemmata_list = [parselemmata(lemmatas)]
+            if len(lemmata_list) != 1:
+                raise Exception('Lemmata: There should only be one subgoal list')
         else:
             if len(substitutions) != len(lemmatas):
                 raise Exception('Lemmata: substitutions and lemmatas should be of the same length')
-            lemmata_list = [parselemmata(l) for l in lemmatas]
         assert isinstance(lemmata_list, list)
         assert all(isinstance(l, list) for l in lemmata_list)
-        assert all((isinstance(t, terms.Term) for t in l) for l in lemmata_list)
+        assert all((isinstance(t, terms.Literal) for t in l) for l in lemmata_list)
         self.lemmatas = lemmata_list
         
     def get_claims(self, goal):

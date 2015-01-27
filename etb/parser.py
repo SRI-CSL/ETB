@@ -370,27 +370,21 @@ def parse(text, nt='statements'):
     node = grammar[nt].parse(text.strip())
     return ETBParser().visit(node)
   except IncompleteParseError as iperr:
-    print u"{0} has extra text: '{1}' (line {2}, column {3}).".format(
+    raise ValueError(u"{0} has extra text: '{1}' (line {2}, column {3}).".format(
       iperr.expr.name, iperr.text[iperr.pos:iperr.pos + 20],
-      iperr.line(), iperr.column())
+      iperr.line(), iperr.column()))
   except ParseError as perr:
     rule_name = ((u"{0}".format(perr.expr.name)) if perr.expr.name else
                  unicode(perr.expr))
     raise ValueError(u"{0} expected at '{1}' (line {2}, column {3})."
                      .format(rule_name, perr.text[perr.pos:perr.pos + 20],
                              perr.line(), perr.column()))
-  except TypeError as terr:
-    print 'Parse error {1}: {0}'.format(terr, type(terr))
-    print 'Parse error: done'
-  except Exception as err:
-    print 'Got an exception: {0}: {1}'.format(err, type(err))
     
 def parse_term(text):
   return parse(text, 'term')
 
 def parse_literal(text):
   lit = parse(text, 'literal')
-  assert isinstance(lit, terms.Literal), 'parse_literal: text {2}, lit {0}: {1}'.format(lit, type(lit), text)
   return lit
   
 def parse_file(file, nt='statements'):

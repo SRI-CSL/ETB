@@ -149,11 +149,12 @@ class Inference(object):
 
         """
         self.log.debug('inference.resolve_claim: claim {0!s}'
-                      .format(self.term_factory.close_literal(claim[0])))
+                       .format(self.term_factory.close_literal(claim[0])))
         self.notify()
         candidate_clauses = []
         annotation_claim = self.logical_state.db_get_annotation(claim)
-        self.log.debug('inference.resolve_claim: annotation_claim = {0}'.format(annotation_claim))
+        self.log.debug('inference.resolve_claim: annotation_claim = {0}'
+                       .format(annotation_claim))
         if annotation_claim:
             claim_goal = annotation_claim.goal
             self.log.debug('inference.resolve_claim: claim_goal: {0}'.format(claim_goal))
@@ -163,6 +164,8 @@ class Inference(object):
             self.log.debug('inference.resolve_claim: candidate_clauses = {0}'.format(candidate_clauses))
         # else:
         #     candidate_clauses = index.get_candidate_generalizations(self.logical_state.db_get_pending_rules_index(), claim[0])
+        self.log.debug('inference.resolve_claim: candidate_clauses = {0}'
+                      .format(candidate_clauses))
         for candidate in candidate_clauses:
             self.propagate_claims(claim_goal, candidate)
             
@@ -171,7 +174,9 @@ class Inference(object):
         Propagation step from a claim for a subgoal for a pending rule (candidate)
         to the generate a new pending rule. 
         """
-        self.log.debug('inference.propagate_claim_to_pending_clause: claim = {0}'.format(self.term_factory.close_literals(claim)))
+        self.log.debug('inference.propagate_claim_to_pending_clause: claim = {0}, candidate = {1}'
+                      .format(self.term_factory.close_literals(claim),
+                              self.term_factory.close_literals(candidate)))
         subst = model.get_unification_l(claim[0],candidate[1])
         # self.log.debug('inference.resolve_claim: candidate {0!s}: {1}'
         #               .format([str(c) for c in self.term_factory.close_literals(candidate)], subst))
@@ -185,6 +190,7 @@ class Inference(object):
             candidate_annotation = self.logical_state.db_get_annotation(candidate)
             parent_goal = candidate_annotation.goal
             self.add_pending_rule(new_clause, explanation, parent_goal)
+            self.logical_state.db_move_stuck_goal_to_goal(candidate[1])
             
     #NSH: This is deadcode - it's no longer called from anywhere.
     #It needs to be revised if it is ever used.  
@@ -428,7 +434,7 @@ class Inference(object):
             # make sure to also interpret it against existing claims (something
             # might already have been added in the past by external
             # machineries)
-            self.resolve_goal_with_existing_claims(goal)
+            #self.resolve_goal_with_existing_claims(goal)
             # self.log.debug('inference.add_goal: setting {0!s}: RESOLVED'
             #                      .format(external_goal))
             self.set_status_goal(goal, graph.Annotation.RESOLVED)
@@ -632,7 +638,7 @@ class Inference(object):
 
         # Add it to all clauses (for its explanation)
         self.log.debug('inference.add_pending_rule: rule {0}'
-                      .format([str(c) for c in self.term_factory.close_literals(rule)]))
+                       .format([str(c) for c in self.term_factory.close_literals(rule)]))
         self.log.debug('inference.add_pending_rule: explanation {0}'.format(explanation))
         parent_goal_claims = self.get_claims_matching_goal(parent_goal)
         self.log.debug('inference.add_pending_rule: parent_goal_claims {0}'.format(parent_goal_claims))
@@ -655,6 +661,8 @@ class Inference(object):
                 subgoal = rule[1]
                 new_subgoal = True
 
+        self.log.debug('inference.add_pending_rule: explanation = {0}'
+                       .format(explanation))
         # Add the goal dependency if the pending rule originates from a goal
         if explanation and model.is_top_down_explanation(explanation):
             original_goal = model.get_goal_from_explanation(explanation)
@@ -835,8 +843,9 @@ class Inference(object):
         :returntype:
             `None`
         """
-        self.log.debug('inference.update_goal: clause: {0}, goal: {1}'.format(pending_clause, goal))
         annotation_pending = self.logical_state.db_get_annotation(pending_clause)
+        self.log.debug('inference.update_goal: clause: {0}, goal: {1}, annotation: {2}'
+                       .format(pending_clause, goal, annotation_pending))
         if annotation_pending:
             annotation_pending.goal = goal
 
@@ -972,8 +981,9 @@ class Inference(object):
             else:
                 annotation = self.logical_state.db_get_annotation(goal)
             if annotation:
-                self.engine.log.debug('Found Annotation for Goal {0} with claims {1}'
+                self.engine.log.debug('Found Annotation for Goal {0} rename {1} with claims {2}'
                                       .format(self.term_factory.close_literal(goal),
+                                             self.term_factory.close_literal(pgoal) if pgoal else None,
                                              annotation.claims))
                 return annotation.claims
             else:

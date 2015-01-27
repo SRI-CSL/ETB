@@ -1,4 +1,4 @@
-from etb.wrapper import Tool, Queries, Substitutions, Success, Failure
+from etb.wrapper import Tool, Lemmata, Substitutions, Success, Failure
 
 import etb.parser
 
@@ -12,7 +12,7 @@ class Ping(Tool):
         else :
             # either for should work:
             #return Queries(self, [{}], [ 'pong(%s)' % str(n-1) ] )
-            return Queries(self, [{}], [ etb.parser.parse('pong({0})'.format(n-1), 'literal') ] )
+            return Lemmata(self, [{}], [ etb.parser.parse('pong({0})'.format(n-1), 'literal') ] )
 
 def register(etb):
     "Register the tool"

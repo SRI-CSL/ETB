@@ -14,6 +14,6 @@ class AsciiDoc(BatchTool):
         output = base + '.html'
         return Substitutions(self, [{ result: output }])
 
-def register(toolbus):
+def register(etb):
     "Register the tool"
-    toolbus.add_tool(AsciiDoc())
+    etb.add_tool(AsciiDoc(etb))

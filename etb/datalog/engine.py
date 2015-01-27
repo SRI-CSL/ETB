@@ -375,8 +375,6 @@ class Engine(object):
 
         """
         assert isinstance(rule, terms.Clause), 'rule is not a terms.Clause in add_pending_rule'
-        if not rule.body: # then it is a fact, we are treating it as a claim:
-            self.add_claim(terms.Claim(rule.head, model.create_external_explanation()))
 
         # otherwise it is a real rule:
         internal_rule = self.term_factory.mk_clause(rule)
@@ -386,7 +384,7 @@ class Engine(object):
                 self.log.debug('Engine.add_pending_rule called with goal  %s and rule %s' %(external_goal, rule))
                 internal_goal = self.term_factory.mk_literal(external_goal)
         else:
-            self.log.debug('Engine.add_pending_rule called without goal.')
+            self.log.info('Engine.add_pending_rule called without goal.')
             return
 
         # Note that there is no from_clause here
@@ -835,17 +833,17 @@ class Engine(object):
         """
         return self.get_claims_matching_goal(goal)
 
-    def is_entailed(self, goal):
-        """
-        .. warning::
-            **DEPRECATED**: There is no requirement on the current engine to
-            support this function.
+    # def is_entailed(self, goal):
+    #     """
+    #     .. warning::
+    #         **DEPRECATED**: There is no requirement on the current engine to
+    #         support this function.
 
-        Check whether the engine currently thinks this goal holds.
-        """
-        assert isinstance(goal, terms.Literal), 'goal is not a Literal in is_entailed'
-        internal_goal = self.term_factory.mk_literal(goal)
-        return self.inference_state.is_entailed(internal_goal)
+    #     Check whether the engine currently thinks this goal holds.
+    #     """
+    #     assert isinstance(goal, terms.Literal), 'goal is not a Literal in is_entailed'
+    #     internal_goal = self.term_factory.mk_literal(goal)
+    #     return self.inference_state.is_entailed(internal_goal)
 
     def clear(self):
         """

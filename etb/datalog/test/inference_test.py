@@ -44,12 +44,12 @@ class TestInference(unittest.TestCase):
         self.i_rule1 = self.tf.mk_clause(rule1)
         self.i_rule2 = self.tf.mk_clause(rule2)
 
-    def test_resolve_claim(self):
-        self.logical_state.db_add_pending_rule(self.i_candidate_pending)
-        self.inference.lock()
-        self.inference.resolve_claim(self.i_claim)
-        self.inference.unlock()
-        self.assertItemsEqual([self.i_candidate_pending, self.i_resolved_clause], self.logical_state.db_get_pending_rules())
+    # def test_resolve_claim(self):
+    #     self.logical_state.db_add_pending_rule(self.i_candidate_pending)
+    #     self.inference.lock()
+    #     self.inference.resolve_claim(self.i_claim)
+    #     self.inference.unlock()
+    #     self.assertItemsEqual([self.i_candidate_pending, self.i_resolved_clause], self.logical_state.db_get_pending_rules())
 
     # Claims should not be added directly, only goals
     # def test_add_claim(self):

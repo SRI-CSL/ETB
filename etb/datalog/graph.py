@@ -104,7 +104,6 @@ class Annotation(object):
             Add links to closing algorithm specification.
 
         """
-
         # the item this Annotation object describes
         self.item = item
         # state is any object that understands get_global_time()
@@ -478,21 +477,22 @@ class DependencyGraph(object):
         Updates the `tau` dictionary for the `node`. Defined as in the closing
         algorithm specification.
         """
-        for h in self.nodes_to_annotations:
-            h_annot = self.get_annotation(h)
+        if node not in self.tau:
+            self.tau[node] = {}
+        for h, h_annot in self.nodes_to_annotations.iteritems():
             if h_annot and h_annot.is_goal() and h_annot.index <= node_annotation.index:
-                tau_g_h = []
-                for h_prime in self.nodes_to_annotations:
+                tau_g_h = None
+                for h_prime in node_annotation.gT:
                     h_prime_annotation = self.get_annotation(h_prime)
                     if (h_prime_annotation and
                         (h_prime_annotation.status == Annotation.CLOSED or h_prime_annotation.status == Annotation.COMPLETED) and
-                        h_prime in node_annotation.gT and
                         node_annotation.gT[h_prime] and
                         h in h_prime_annotation.gD and
                         h_prime_annotation.gD[h] is not None):
-                            tau_g_h.append(h_prime_annotation.gD[h])
-                if node not in self.tau:
-                    self.tau[node] = {}
+                        if tau_g_h is None:
+                            tau_g_h = h_prime_annotation.gD[h]
+                        else:
+                            tau_g_h = min(tau_g_h, h_prime_annotation.gD[h])
 
                 self.tau[node][h] = tau_g_h
 
@@ -536,12 +536,10 @@ class DependencyGraph(object):
         annotations_children = self.get_annotations_of_children(node)
         # subgoal has been set:
         for j in annotations_children:
-            if not self.has_subgoal(j.item):
+            if len(j.item) > 1 and not self.has_subgoal(j.item):
                 return False
-
         # 2
-        for h in self.nodes_to_annotations:
-            h_annotation = self.nodes_to_annotations[h]
+        for h, h_annotation in self.nodes_to_annotations.iteritems():
             gTh = []
             if h in annotation_node.gT:
                 gTh = annotation_node.gT[h]
@@ -551,27 +549,27 @@ class DependencyGraph(object):
                 index_h_smaller_than_node = True
 
             h_closed = False
-            if h_annotation.status == Annotation.CLOSED and h_annotation.gUnclosed <= annotation_node.index:
+            if (h_annotation.status == Annotation.CLOSED or h_annotation.status == Annotation.COMPLETED) and h_annotation.gUnclosed <= annotation_node.index:
                 h_closed = True
 
             if gTh and not index_h_smaller_than_node and not h_closed:
                 return False
 
-            if index_h_smaller_than_node and h_closed:
-                for j in gTh:
-                    frozen_j = model.freeze(j)
-                    annotation_j = self.get_annotation(frozen_j)
-                    if annotation_j:
-                        if not annotation_j.subgoalindex == len(h_annotation.claims):
-                            return False
-                        children_j = self.get_annotations_of_children(j)
-                        for j_prime in children_j:
-                            if j_prime.is_pending_clause():
-                                if not len(j_prime.item()) == 1 and not self.has_subgoal(j_prime.item):
-                                    return False
-                    else:
+            #if index_h_smaller_than_node and h_closed:
+            for j in gTh:
+                frozen_j = model.freeze(j)
+                annotation_j = self.get_annotation(frozen_j)
+                if annotation_j:
+                    if not annotation_j.subgoalindex == len(h_annotation.claims):
                         return False
-            return True
+                    children_j = self.get_annotations_of_children(frozen_j)
+                    for j_prime in children_j:
+                        if j_prime.is_pending_clause():
+                            if not len(j_prime.item) == 1 and not self.has_subgoal(j_prime.item):
+                                return False
+                else:
+                    return False
+        return True
 
 
     def recompute_unclosed(self, node, annotation_node):
@@ -595,12 +593,9 @@ class DependencyGraph(object):
             gDh = gD[h]
             h_annot = self.get_annotation(h)
             if gDh:
-                if max_h_so_far and max_h_so_far.index < h_annot.index and not h_annot.status == Annotation.CLOSED and not h_annot.status == Annotation.COMPLETED:
-                    max_h_so_far = h_annot
-                if not max_h_so_far and not h_annot.status == Annotation.CLOSED and not h_annot.status == Annotation.COMPLETED:
+                if (not max_h_so_far) or max_h_so_far.index < h_annot.index:
                     max_h_so_far = h_annot
         annotation_node.gUnclosed = max_h_so_far
-
 
 
     def close_goal(self, node, annotation_node):
@@ -618,37 +613,47 @@ class DependencyGraph(object):
 
         """
         if self.can_close_to_goal_be_applied(node, annotation_node):
-
             self.update_tau(node, annotation_node)
 
-            if node in self.tau and node in self.tau[node] and not self.tau[node][node]:
+            if node in self.tau and node in self.tau[node] and (not self.tau[node][node] or self.tau[node][node] == len(annotation_node.claims)):
                 # self.log.info('graph.close_goal 1: setting {0}: CLOSED'
                 #               .format(self.state.engine.term_factory.close_literal(node)))
                 annotation_node.status = Annotation.CLOSED
                 if self.state.SLOW_MODE:
                     self.log.debug('Closed goal with index %s as tau(g)(g) is empty', annotation_node.index)
                     time.sleep(self.state.SLOW_MODE)
+                self.close_node(node, annotation_node)
+            else:
+                annotation_node.status = Annotation.RESOLVED
 
-
-            if node in self.tau and node in self.tau[node] and model.min_indices(None, self.tau[node][node]) == len(annotation_node.claims):
-                # self.log.info('graph.close_goal 2: setting {0}: CLOSED'
-                #               .format(self.state.engine.term_factory.close_literal(node)))
-                annotation_node.status = Annotation.CLOSED
-                if self.state.SLOW_MODE:
-                    self.log.debug('Closed goal with index %s as min(tau(g)(g)) == number of claims for g', annotation_node.index)
-                    time.sleep(self.state.SLOW_MODE)
-
-            for h in self.nodes_to_annotations:
-                h_annot = self.get_annotation(h)
-                if h_annot and h_annot.is_goal() and h_annot.index < annotation_node.index:
-                    if h in annotation_node.gT and annotation_node.gT[h] and not (h_annot.status == Annotation.CLOSED or h_annot.status == Annotation.COMPLETED):
-                        annotation_node.gD[h] = model.min_indices(len(h_annot.claims), self.tau[node][h])
+    def close_node(self, node, annotation_node):
+        gd_everywhere_undefined = True
+        
+        for h, h_annot in self.nodes_to_annotations.iteritems():
+            if h_annot and h_annot.is_goal() and h_annot.index < annotation_node.index:
+                if h in annotation_node.gT and annotation_node.gT[h] and not (h_annot.status == Annotation.CLOSED or h_annot.status == Annotation.COMPLETED):
+                    if self.tau[node][h] is None:
+                        annotation_node.gD[h] = len(h_annot.claims)
                     else:
-                        if h in self.tau[node] and self.tau[node][h]:
-                            annotation_node.gD[h] = model.min_indices(None, self.tau[node][h])
-                        else:
-                            annotation_node.gD[h] = None
+                        annotation_node.gD[h] = min(len(h_annot.claims), self.tau[node][h])
+                    gd_everywhere_undefined = False
+                else:
+                    if h in self.tau[node] and self.tau[node][h]:
+                        annotation_node.gD[h] = self.tau[node][h]
+                        gd_everywhere_undefined = False
+                    else:
+                        annotation_node.gD[h] = None
+        if gd_everywhere_undefined:
+            self.transitively_complete(node, annotation_node)
+        else:
             self.recompute_unclosed(node, annotation_node)
+
+    def transitively_complete(self, node, annotation_node):
+        annotation_node.status = Annotation.COMPLETED
+        for h in annotation_node.gT:
+            h_annot = self.get_annotation(h)
+            if not h_annot.status == Annotation.COMPLETED:
+                self.transitively_complete(h, h_annot)
 
     def close(self):
         """
@@ -662,12 +667,10 @@ class DependencyGraph(object):
         with self:
             if not self.inferencing_clear:
                 self.condition.wait(30)
-            self.log.debug("Engine closing called")
             sorted_highest_index_first = sorted(self.nodes_to_annotations.items(), key=lambda item: item[1].index, reverse=True)
             for item in sorted_highest_index_first:
                 node = item[0]
                 self.close_goal(node, item[1])
-            self.log.debug("Engine closing done")
 
     def is_immediate_subgoal(self, node1_annotation, node2_annotation):
         """
@@ -714,10 +717,9 @@ class DependencyGraph(object):
                 self.condition.wait(4)
             self.log.debug("Engine completion called, {0} nodes"
                            .format(len(self.nodes_to_annotations)))
-            for node in self.nodes_to_annotations:
+            for node, annotation in self.nodes_to_annotations.iteritems():
                 if not self.state.no_stuck_subgoals(node):
                     continue
-                annotation = self.get_annotation(node)
                 if annotation.status == Annotation.CLOSED:
                     everywhere_undefined = True
                     for h in self.nodes_to_annotations:
@@ -734,8 +736,7 @@ class DependencyGraph(object):
                             time.sleep(self.state.SLOW_MODE)
                         continue
 
-                    for h in self.nodes_to_annotations:
-                        h_annot = self.get_annotation(h)
+                    for h, h_annot in self.nodes_to_annotations.iteritems():
                         if h_annot and self.is_immediate_subgoal(annotation, h_annot) and h_annot.status == Annotation.COMPLETED:
                             # self.log.info('graph.complete 2: {0} COMPLETED'
                             #               .format(self.state.engine.term_factory.close_literal(h)))
@@ -805,6 +806,9 @@ class DependencyGraph(object):
             annotation_goal = self.get_annotation(frozen)
 
         if claim not in annotation_goal.claims:
+            if False: #goal == [1, -1, -2, 3]:
+                import traceback
+                traceback.print_stack()
             annotation_goal.claims.append(claim)
 
 

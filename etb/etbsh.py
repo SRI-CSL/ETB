@@ -660,7 +660,6 @@ class ETBShell(ETBCmdLineClient):
         except KeyboardInterrupt:
             print "Interrupted!"
         output = self.etb().query_answers(q)
-        print 'After ETB query_answers'
         res = self.translate_answers(output)
         if res == []:
             self.errors(q)

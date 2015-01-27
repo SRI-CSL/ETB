@@ -806,14 +806,14 @@ class Networking(SocketServer.ThreadingMixIn,
             number = 0
             while not self.etb.engine.is_completed(goal):
                 self.etb.engine.close()
-                self.etb.engine.complete()
-                if False and number > 5:
+                if number > 100:
                     filename = self.etb.engine.goal_deps_to_png(goal)
                     os.rename(filename, "%s_%s.png" % (goal, number))
-                    #self.log.info(os.getcwd())
+                    self.log.error('query_wait timeout')
+                    return False
                 number = number + 1
                 self.log.debug("query_wait sleeping for query: %s" % qid)
-                time.sleep(.1)
+                time.sleep(1)
         return True
 
 

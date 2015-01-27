@@ -110,6 +110,7 @@ class TermFactory(object):
             :class:`etb.terms.Term`
 
         """
+        assert isinstance(integer, int), '{0} should be an int'.format(integer)
         if integer in self.__i_to_s:
             return self.__i_to_s[integer]
         else: # if the integer is not there (eg from making new internal
@@ -287,7 +288,10 @@ class TermFactory(object):
             internal_args = internal_literal[1:]
             external_predicate = self.get_symbol(internal_predicate)
             external_args = [self.get_symbol(a) for a in internal_args]
-            t = terms.mk_literal(external_predicate, external_args)
+            try:
+                t = terms.mk_literal(external_predicate, external_args)
+            except Exception as e:
+                raise
             return t
 
     def close_literals(self, internal_literals):
@@ -1087,6 +1091,8 @@ class LogicalState(object):
         :returntype:
             `None`
         """
+        assert isinstance(goal, (list, tuple)), 'goal {0} should be a list or tuple'.format(goal)
+        assert all(isinstance(x, int) for x in goal), 'goal {0} should be a list of ints'.format(goal)
         with self:
             index.add_to_index(self.db_goals,goal,goal)
             # Also add it to the Goal Dependencies graph

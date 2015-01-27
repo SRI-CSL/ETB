@@ -1,6 +1,6 @@
 # A library of util functions, without any tool invocation
 
-from etb.wrapper import Tool, Queries, Substitutions, Success, Failure
+from etb.wrapper import Tool, Substitutions, Lemmata, Success, Failure
 
 import etb.terms
 
@@ -52,7 +52,7 @@ class Utils(Tool):
             yices_file.write('(assert (<= %s %s))' % (v, high))
             yices_file.write('(check)')
         yices_file_ref = self.fs.put_file('between.yices')
-        return Queries(self, [{}], [ 'yices(%s, "sat")' % yices_file_ref ])
+        return Lemmata(self, [{}], [ 'yices(%s, "sat")' % yices_file_ref ])
 
     # Two dummy predicates used for testing
     
@@ -62,7 +62,7 @@ class Utils(Tool):
         if n == 0 :
             return Success(self)
         else :
-            return Queries(self, [{}], [ 'dummy(%s)' % str(n-1) ] )
+            return Lemmata(self, [{}], [ 'dummy(%s)' % str(n-1) ] )
 
     @Tool.predicate('+n: value')
     def bad_dummy(self, n):
@@ -70,7 +70,7 @@ class Utils(Tool):
         if n == 0 :
             return Failure(self)
         else :
-            return Queries(self, [{}], [ 'bad_dummy(%s)' % str(n-1) ])
+            return Lemmata(self, [{}], [ 'bad_dummy(%s)' % str(n-1) ])
 
 def register(etb):
     "Register the tool"

@@ -5,7 +5,7 @@ import time
 import logging
 import subprocess
 from etb import terms
-from etb.wrapper import Tool, Substitutions, Success, Failure
+from etb.wrapper import Tool, Substitutions, Success, Failure, Errors
 
 class Builtins(Tool):
     """Some builtin predicates.
@@ -36,17 +36,27 @@ class Builtins(Tool):
 
     @Tool.sync
     @Tool.volatile
-    @Tool.predicate('+a: value, +b: value, -res: value')
-    def plus(self, a, b, res):
-        """Checks whether res=a+b, or bind res to a+b.
-        a and b have to be constants, otherwise it will fail."""
-        a = a.get_val()
-        b = b.get_val()
-        if res.is_var():
-            return Substitutions(self, [self.bindResult(res, a+b)])
+    @Tool.predicate('a: value, b: value, sum: value')
+    def plus(self, a, b, sum):
+        """Like Prolog sum; at most one argument may be a variable,
+        if none are checks whether sum=a+b, else binds the variable
+        accordingly.
+        """
+        if (a.is_var() and (b.is_var() or sum.is_var())) or (b.is_var() and sum.is_var()):
+            return Errors(self, ["Only one variable allowed in plus."])
+        if ((not (a.is_var() or a.is_numconst()))
+            or (not (b.is_var() or b.is_numconst()))
+            or (not (sum.is_var() or sum.is_numconst()))):
+            return Errors(self, ["plus expects numbers"])
+        if a.is_var():
+            return Substitutions(self, [self.bindResult(a, sum.num - b.num)])
+        elif b.is_var():
+            return Substitutions(self, [self.bindResult(b, sum.num - a.num)])
+        elif sum.is_var():
+            return Substitutions(self, [self.bindResult(sum, a.num + b.num)])
         else:
-            res = res.get_val()
-            return Success(self) if res == a + b else Failure(self)
+            res = sum.num == a.num + b.num
+            return Success(self) if res else Failure(self)
 
     @Tool.sync
     @Tool.volatile
