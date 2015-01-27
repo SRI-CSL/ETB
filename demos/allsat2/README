@@ -10,7 +10,7 @@ assumes that it can be found in your path.
 
 Running the demo
 ----------------
-For the impatient, run etbsh, then the following:
+For the impatient, run 'etbsh --clean', then the following:
 
 f = put_file(a.ys)
 q = query(allsat($f, Answers))
@@ -22,11 +22,10 @@ Read below for more details.
 To run the demo, cd to the demos/allsat directory (containing this README).
 Then run the ETB shell
 
-% etbsh
+% etbsh --clean
 
-This loads the etb_conf.ini file, which lists the rules files to load - all
-other parameters take default values, use etbsh --help to see them all.
-In particular, the wrappers are loaded from the wrappers subdirectory.
+This loads the rules and wrappers from the corresponding directories,
+use etbsh --help to see more options.
 
 The ETB server is configured to use yices to answer SAT questions. It also
 interprets the predicate negateModel, which given a formula and a model for

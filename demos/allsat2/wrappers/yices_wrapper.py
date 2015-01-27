@@ -8,12 +8,12 @@ class Yices_batch(BatchTool):
     Simple subprocess interface for one-shot invocations of yices.
     '''
 
-    @Tool.predicate("+left: value, +right: value")
-    def equal(self, left, right):
-        if left == right:
-            return Success(self) 
-        else:
-            return Failure(self) 
+    # @Tool.predicate("+left: value, +right: value")
+    # def equal(self, left, right):
+    #     if left == right:
+    #         return Success(self) 
+    #     else:
+    #         return Failure(self) 
 
     @Tool.predicate("-out: value")
     def nil(self, v):
