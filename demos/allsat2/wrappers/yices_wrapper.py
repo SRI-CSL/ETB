@@ -50,8 +50,8 @@ class Yices_batch(BatchTool):
         with tempfile.NamedTemporaryFile(delete=False, dir='.') as oc:
             new_file = os.path.basename(oc.name)
             print >>oc, '(include "%s")' % formula['file']
+            print >>oc, '(set-evidence! true)'
             print >>oc, '(check)'
-            print >>oc, '(show-model)'
         (ret, out, err) = self.callTool('yices', new_file)
         print 'yices  said: ', out
         if ret != 0:
