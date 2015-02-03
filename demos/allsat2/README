@@ -5,8 +5,9 @@ This directory contains a simple demo of using the ETB to build all
 the solutions satisfying a formula using a SAT solver by iteratively
 getting a solution and negating it to get the next one.
 
-The demo uses yices (http://yices.csl.sri.com/) as the SAT solver, and
-assumes that it can be found in your path.
+The demo uses yices 2 (http://yices.csl.sri.com/) as the SAT solver, and
+assumes that it can be found in your path (i.e., at the command line,
+'yices --version' should return 2.X)
 
 Running the demo
 ----------------
@@ -27,7 +28,7 @@ Then run the ETB shell
 This loads the rules and wrappers from the corresponding directories,
 use etbsh --help to see more options.
 
-The ETB server is configured to use yices to answer SAT questions. It also
+The ETB server is configured to use yices 2 to answer SAT questions. It also
 interprets the predicate negateModel, which given a formula and a model for
 that formula produces a new formula which extends its input formula with the
 negation of the model. Finally, the ETB server has the following rules to
@@ -60,14 +61,14 @@ Now start a query to find all the solutions satisfying the formula:
 Here q is just a unique identifier assigned to the query.  You can submit
 other queries, or get the answers to a specific one using query_wait.
 
-% r = query_wait(q)
+% r = query_wait($q)
 
 There are four answers, which are triplets of assignments to the
 variable a, b and c.
 
 To see them use:
 
-% query_answers(q)
+% query_answers($q)
 
 It should produce (note that the query id will be different):
 
