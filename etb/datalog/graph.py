@@ -531,6 +531,7 @@ class DependencyGraph(object):
 
         # 1:
         if not annotation_node.status == Annotation.RESOLVED and not annotation_node.status == Annotation.CLOSED and not annotation_node.status == Annotation.COMPLETED:
+            
             return False
 
         annotations_children = self.get_annotations_of_children(node)
@@ -549,7 +550,7 @@ class DependencyGraph(object):
                 index_h_smaller_than_node = True
 
             h_closed = False
-            if (h_annotation.status == Annotation.CLOSED or h_annotation.status == Annotation.COMPLETED) and h_annotation.gUnclosed <= annotation_node.index:
+            if h_annotation.status == Annotation.COMPLETED or (h_annotation.status == Annotation.CLOSED and ((not h_annotation.gUnclosed) or h_annotation.gUnclosed <= annotation_node.index)):
                 h_closed = True
 
             if gTh and not index_h_smaller_than_node and not h_closed:
@@ -570,7 +571,6 @@ class DependencyGraph(object):
                 else:
                     return False
         return True
-
 
     def recompute_unclosed(self, node, annotation_node):
         """
@@ -594,7 +594,7 @@ class DependencyGraph(object):
             h_annot = self.get_annotation(h)
             if gDh:
                 if (not max_h_so_far) or max_h_so_far.index < h_annot.index:
-                    max_h_so_far = h_annot
+                    max_h_so_far = h_annot.index
         annotation_node.gUnclosed = max_h_so_far
 
 
@@ -639,8 +639,11 @@ class DependencyGraph(object):
                     gd_everywhere_undefined = False
                 else:
                     if h in self.tau[node] and self.tau[node][h]:
-                        annotation_node.gD[h] = self.tau[node][h]
-                        gd_everywhere_undefined = False
+                        if not (h_annot.status == Annotation.CLOSED or h_annot.status == Annotation.COMPLETED):
+                            annotation_node.gD[h] = self.tau[node][h]
+                            gd_everywhere_undefined = False
+                        else:
+                            annotation_node.gD[h] = None
                     else:
                         annotation_node.gD[h] = None
         if gd_everywhere_undefined:
@@ -667,7 +670,8 @@ class DependencyGraph(object):
         with self:
             if not self.inferencing_clear:
                 self.condition.wait(30)
-            sorted_highest_index_first = sorted(self.nodes_to_annotations.items(), key=lambda item: item[1].index, reverse=True)
+            goal_nodes = [n for n in self.nodes_to_annotations.items() if isinstance(n[0][0], int)]
+            sorted_highest_index_first = sorted(goal_nodes, key=lambda item: item[1].index, reverse=True)
             for item in sorted_highest_index_first:
                 node = item[0]
                 self.close_goal(node, item[1])
@@ -880,4 +884,13 @@ class DependencyGraph(object):
             return self.parents[node]
         else:
             return []
+            
+    def external_form(self, node):
+        """
+        Gets the external form of node, mostly for debugging printouts.
+        """
+        if isinstance(node[0], int):
+            return self.state.engine.term_factory.close_literal(node)
+        else:
+            return self.state.engine.term_factory.close_literals(node)
             

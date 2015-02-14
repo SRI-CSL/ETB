@@ -563,8 +563,8 @@ class Inference(object):
             self.logical_state.db_add_claim(claim)
         # Then resolve the claim against the pending rules (this might in
         # turn add new pending rules)
-        # self.log.debug('inference.add_claim: before resolve_claim {0!s}'
-        #               .format(self.term_factory.close_literal(claim[0])))
+        # self.log.info('inference.add_claim: before resolve_claim {0!s}'
+        #              .format(self.term_factory.close_literals(claim)))
         self.resolve_claim(claim)
         # self.log.debug('inference.add_claim: after resolve_claim {0!s}'
         #               .format(self.term_factory.close_literal(claim[0])))
@@ -685,7 +685,7 @@ class Inference(object):
             # This is already being done in propagate_claim_to_pending_clause
             # self.increase_subgoalindex(originating_rule)
             if not model.is_fact(rule):
-                self.updategT(subgoal, originating_rule)
+                self.updategT(subgoal, rule)
 
         if self.engine.SLOW_MODE:
             self.log.debug('Slowing down before updating goal dependencies by adding pending rule to subgoal edge.')
@@ -727,7 +727,10 @@ class Inference(object):
         Applies the propagate rule to propagate any existing claims from an
         already extant subgoal to the rule to create new pending rules. 
         """
-        self.log.debug('inference.propagate_claims: subgoal: {0}'.format(self.term_factory.close_literal(subgoal)))
+        self.log.debug('inference.propagate_claims: subgoal: {0}'
+                      .format(self.term_factory.close_literal(subgoal)))
+        self.log.debug('inference.propagate_claims: rule: {0}'
+                      .format(self.term_factory.close_literals(rule)))
         fsubgoal = model.freeze(subgoal)
         annotation_subgoal = self.logical_state.db_get_annotation(fsubgoal)
         fclause = model.freeze(rule)
@@ -736,6 +739,8 @@ class Inference(object):
         if annotation_subgoal:
             subgoal_claims = annotation_subgoal.claims
             max_subgoal_claims = len(subgoal_claims) 
+            self.log.debug('inference.propagate_claims: subgoal_claims = {}'
+                          .format([self.term_factory.close_literals(sc) for sc in subgoal_claims]))
             self.log.debug('inference.propagate_claims: max_subgoal_claims = {}'.format(max_subgoal_claims))
             for i in range(subgoal_index, max_subgoal_claims):
                 self.propagate_claim_to_pending_clause(subgoal_claims[i], rule)

@@ -1134,14 +1134,14 @@ class Engine(object):
             #pretty_print_gD = "\n\t\t(g.D: " + str(annotation_root.print_gD(self.term_factory)) + " )"
 
             if any(isinstance(el, tuple) for el in root):
-                self.log.info("png generation: %s", self.__readable_clause(self.term_factory.close_literals(root)))
+                self.log.debug("png generation: %s", self.__readable_clause(self.term_factory.close_literals(root)))
                 root_node = pydot.Node(str(root),
                         label=self.__readable_clause(self.term_factory.close_literals(root))
                         + pretty_print_subgoalindex +
                         pretty_print_goal +
                         pretty_print_index)
             else:
-                self.log.info("png generation: %s", str(self.term_factory.close_literal(root)))
+                self.log.debug("png generation: %s", str(self.term_factory.close_literal(root)))
                 root_node = pydot.Node(str(root),
                         label=str(self.term_factory.close_literal(root)) +
                         pretty_print_claims +
