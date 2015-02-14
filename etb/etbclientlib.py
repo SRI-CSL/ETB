@@ -78,15 +78,15 @@ class ETBClient(object):
             proxy = xmlrpclib.ServerProxy(self._url)
             proxy.test()
         except:
-            raise Exception('Error: cannot connect to the ETB at %s.'
-                            % self._url)
+            raise Exception('Error: cannot connect to the ETB at %s.' % self._url)
         return proxy
 
     @wrap_xmlrpcfault
     def query_answers(self, query):
         '''Loads the JSON result of the query_answers method'''
         answers = self.etb().query_answers(query)
-        return terms.loads(answers)
+        if answers:
+            return terms.loads(answers)
     
     @wrap_xmlrpcfault
     def query_claims(self, query):

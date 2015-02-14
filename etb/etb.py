@@ -305,15 +305,18 @@ class ETB(object) :
         """
         query = self.get_query(qid)
         self.log.debug("in query_answers %s of type %s" % (query, type(query)))
-        goal = query[0]
-        self.log.debug("goal: %s of type %s" % (goal, type(goal)))
-        substs =  self.engine.get_substitutions(goal)
-        self.log.debug("substitutions: %s" % substs)
-        substs = sorted(substs)
-        claims = self.engine.get_claims_matching_goal(goal)
-        self.log.debug("claims: %s" % claims)
-        claims = sorted(claims)
-        return { 'substs' : substs,  'claims' : claims }
+        if query:
+            goal = query[0]
+            self.log.debug("goal: %s of type %s" % (goal, type(goal)))
+            substs =  self.engine.get_substitutions(goal)
+            self.log.debug("substitutions: %s" % substs)
+            substs = sorted(substs)
+            claims = self.engine.get_claims_matching_goal(goal)
+            self.log.debug("claims: %s" % claims)
+            claims = sorted(claims)
+            return { 'substs' : substs,  'claims' : claims }
+        else:
+            self.log.error('No query found for {0}'.format(qid))
 
     def all_claims(self):
         self.log.debug("in all_claims")

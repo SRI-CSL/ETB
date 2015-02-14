@@ -801,12 +801,13 @@ class Networking(SocketServer.ThreadingMixIn,
         self.log.debug("query_wait called for: {0} {1} goal: {2}"
                        .format(qid, len(goals), goals))
         if not goals:
+            self.log.error('Query id {0} not known'.format(qid))
             return True
         for goal in goals: #stjin: this is only 1 goal always I think, but it's a list..
             number = 0
             while not self.etb.engine.is_completed(goal):
                 self.etb.engine.close()
-                if number > 100:
+                if False: #number > 100:
                     filename = self.etb.engine.goal_deps_to_png(goal)
                     os.rename(filename, "%s_%s.png" % (goal, number))
                     self.log.error('query_wait timeout')
@@ -827,12 +828,12 @@ class Networking(SocketServer.ThreadingMixIn,
         filename = filename.strip('\'"')
         return self.etb.query_proof(qid, filename)
 
-    #new in etb3
     @_export
     def query_explanation(self, qid):
         #print "query_explanation(%s)" % qid
         goals = self.etb.get_query(qid)
         if not goals:
+            self.log.error('Query id {0} not known'.format(qid))
             return []
         if len(goals) > 1:
             return []
@@ -849,6 +850,7 @@ class Networking(SocketServer.ThreadingMixIn,
     def query_show_goal_dependencies(self, qid):
         goals = self.etb.get_query(qid)
         if not goals:
+            self.log.error('Query id {0} not known'.format(qid))
             return []
         if len(goals) > 1:
             return []
@@ -872,24 +874,17 @@ class Networking(SocketServer.ThreadingMixIn,
     @_export
     def query_is_completed(self, qid):
         goals = self.etb.get_query(qid)
-        for goal in goals:
-            if not self.etb.engine.is_completed(goal):
-                return False
+        if goals:
+            for goal in goals:
+                if not self.etb.engine.is_completed(goal):
+                    return False
+        else:
+            self.log.error('Query id {0} not known'.format(qid))
         return True
 
    
     ### Results
-    
-    @_export
-    def query_answers_old(self, qid):
-        """Given a query ID, returns a JSON-encoded list of all current answers
-        (substitutions) to the query. The list may grow later, as new claims
-        are added to the system.
-        """
-        answers = self.etb.query_answers(qid)
-        return terms.dumps(answers['substs'])
 
-    #modified for  etb3
     @_export
     def query_answers(self, qid):
         """Given a query ID, returns a JSON-encoded list of all current answers
@@ -897,9 +892,11 @@ class Networking(SocketServer.ThreadingMixIn,
         are added to the system.
         """
         answers = self.etb.query_answers(qid)
-        return terms.dumps(answers['substs'])
+        if answers:
+            return terms.dumps(answers['substs'])
+        else:
+            return ''
 
-    #ported to etb3
     @_export
     def query_claims(self, qid):
         """Returns the set of fact answers for this query. It returns a
@@ -910,6 +907,7 @@ class Networking(SocketServer.ThreadingMixIn,
         """
         goals = self.etb.get_query(qid)
         if not goals:
+            print('Invalid query id: {0}'.format(qid))
             return []
         answers = []
         for goal in goals:
@@ -991,8 +989,12 @@ class Networking(SocketServer.ThreadingMixIn,
         backward chaining) to the given file, in dot format.
         """
         q = self.etb.get_query(query)
-        q.to_dot(filename.strip('"').strip('\''))
-        return True
+        if q:
+            q.to_dot(filename.strip('"').strip('\''))
+            return True
+        else:
+            self.log.error('Query id {0} not known'.format(qid))
+            return False
 
     @_export
     def get_contents_from_network(self, sha1, seen=None):
