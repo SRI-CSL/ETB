@@ -322,6 +322,8 @@ class TermFactory(object):
             a string
 
         """
+        if isinstance(internal_literals, graph.PendingRule):
+            internal_literals = internal_literals.clause
         if internal_literals is None:
             return "None"
         list_of_terms = self.close_literals(internal_literals)
@@ -1042,7 +1044,7 @@ class LogicalState(object):
         """
         return index.in_index(self.db_claims, claim[0], claim )
 
-    def db_add_clause(self,clause, explanation):
+    def db_add_clause(self, prule, explanation):
         """
         Add a `clause` to the DB. The `explanation` is of the form
         `(Axiom,0)` or `(ResolutionBottomUp, clause', fact)` or
@@ -1054,7 +1056,7 @@ class LogicalState(object):
         an explanation tree for claims using :func:`etb.datalog.engine.to_png`.
 
         :parameters:
-            - `clause`: a list of lists of integers
+            - `prule`: a `graph.PendingRule`
             - `explanation`: `(Axiom,0)` or `(ResolutionBottomUp, clause',
               fact)` or `(ResolutionTopDown, clause', goal)`  or `(External,
               0)` or a :class:`etb.terms.Term`
@@ -1063,12 +1065,13 @@ class LogicalState(object):
             `None`
 
         """
-        c = freeze_clause(clause)
+        assert isinstance(prule, (list, tuple, graph.PendingRule))
+        key = freeze(prule) if isinstance(prule, (list, tuple)) else prule
         with self:
             if not explanation is None:
-                self.db_all[c] = explanation
+                self.db_all[key] = explanation
             else:
-                self.db_all[c] = ()
+                self.db_all[key] = ()
 
     def db_add_claim(self,claim):
         """
@@ -1094,7 +1097,8 @@ class LogicalState(object):
         assert isinstance(goal, (list, tuple)), 'goal {0} should be a list or tuple'.format(goal)
         assert all(isinstance(x, int) for x in goal), 'goal {0} should be a list of ints'.format(goal)
         with self:
-            index.add_to_index(self.db_goals,goal,goal)
+            if not index.in_index(self.db_goals,goal,goal):
+                index.add_to_index(self.db_goals,goal,goal)
             # Also add it to the Goal Dependencies graph
             self.goal_dependencies.add_goal(goal)
 
@@ -1169,8 +1173,11 @@ class LogicalState(object):
             a :class:`etb.datalog.graph.Annotation`
 
         """
-        frozen = freeze(item)
-        return self.goal_dependencies.get_annotation(frozen)
+        if isinstance(item, (list, tuple)):
+            frozen = freeze(item)
+            return self.goal_dependencies.get_annotation(frozen)
+        else:
+            return self.goal_dependencies.get_annotation(item)
 
     def close(self):
         """
@@ -1271,8 +1278,9 @@ class LogicalState(object):
 
         """
         with self:
-            self.db_remove_stuck_goal(goal)
-            self.db_add_goal(goal)
+            if index.in_index(self.db_stuck_goals, goal, goal):
+                self.db_remove_stuck_goal(goal)
+                self.db_add_goal(goal)
 
     def db_get_claims_index(self):
         """
@@ -1436,6 +1444,7 @@ class LogicalState(object):
         :parameters:
             - `clause`: a list of list of integers representing a rule
         """
+        assert(isinstance(clause, list))
         with self:
             index.add_to_index(self.db_heads, clause[0],clause)
 
@@ -1500,7 +1509,7 @@ class LogicalState(object):
             self.db_add_clause_selected(clause[1], clause)
             # also add it to the goal dependency graph (we want the pending
             # rules in between the goals in the graph)
-            self.goal_dependencies.add_node(freeze_clause(clause))
+        return self.goal_dependencies.add_pending_rule(clause)
 
     def db_get_pending_rules_index(self):
         """

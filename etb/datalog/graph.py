@@ -229,6 +229,9 @@ class Annotation(object):
             closed_gD[closed_subgoal] = self.gD[subgoal]
         return closed_gD
 
+class PendingRule(object):
+    def __init__(self, clause):
+        self.clause = model.freeze(clause)
 
 class DependencyGraph(object):
     def __init__(self, state):
@@ -327,16 +330,15 @@ class DependencyGraph(object):
         :returntype:
             `None`
         """
-        frozen_clause = model.freeze(clause)
-        if not self.__node_is_present(frozen_clause):
-            # add node to graph
-            self.add_node(frozen_clause)
-            annotation_clause = Annotation(frozen_clause, Annotation.PENDING_CLAUSE, self.state)
-            self.nodes_to_annotations[frozen_clause] = annotation_clause
+        prule = PendingRule(clause)
+        self.add_node(prule)
+        annotation_clause = Annotation(prule, Annotation.PENDING_CLAUSE, self.state)
+        self.nodes_to_annotations[prule] = annotation_clause
+        return prule
 
-    def add_goal_to_pending_rule(self, goal, rule):
+    def add_goal_to_pending_rule(self, goal, prule):
         """
-        Add an dependency from a pending rule to a goal (a subgoal of theat
+        Add an dependency from a pending rule to a goal (a supergoal of the
         pending rule) to the dependency graph.
 
         :parameters:
@@ -347,9 +349,13 @@ class DependencyGraph(object):
             `None`
         """
         self.add_goal(goal)
-        self.add_pending_rule(rule)
-        self.graph[model.freeze(goal)].append(model.freeze(rule))
-        self.parents[model.freeze(rule)].append(model.freeze(goal))
+        assert isinstance(prule, PendingRule)
+        assert self.get_annotation(prule)
+        self.graph[model.freeze(goal)].append(prule)
+        if not prule in self.parents:
+            self.parents[prule] = [model.freeze(goal)]
+        else:
+            self.parents[prule].append(model.freeze(goal))
 
     def add_pending_rule_to_pending_rule(self, rule1, rule2):
         """
@@ -362,12 +368,16 @@ class DependencyGraph(object):
         :returntype:
             `None`
         """
-        self.add_pending_rule(rule1)
-        self.add_pending_rule(rule2)
-        self.graph[model.freeze(rule1)].append(model.freeze(rule2))
-        self.parents[model.freeze(rule2)].append(model.freeze(rule1))
+        #prule1 = self.add_pending_rule(rule1)
+        #self.add_pending_rule(rule2)
+        assert isinstance(rule1, PendingRule)
+        assert isinstance(rule2, PendingRule)
+        assert self.get_annotation(rule1)
+        assert self.get_annotation(rule2)
+        self.graph[rule1].append(rule2)
+        self.parents[rule2].append(rule1)
 
-    def add_pending_rule_to_goal(self, rule, goal):
+    def add_pending_rule_to_goal(self, prule, goal):
         """
         Add a dependency from a pending rule to a goal to the dependency graph.
 
@@ -378,10 +388,11 @@ class DependencyGraph(object):
         :returntype:
             `None`
         """
+        assert(isinstance(prule, PendingRule))
+        assert self.get_annotation(prule)
         self.add_goal(goal)
-        self.add_pending_rule(rule)
-        self.graph[model.freeze(rule)].append(model.freeze(goal))
-        self.parents[model.freeze(goal)].append(model.freeze(rule))        
+        self.graph[prule].append(model.freeze(goal))
+        self.parents[model.freeze(goal)].append(prule)
 
     def get_annotation(self, item):
         """
@@ -449,7 +460,7 @@ class DependencyGraph(object):
         """
         annotations_children = self.get_annotations_of_children(node)
         for child in annotations_children:
-            if child.is_goal(self):
+            if is_instance(child, Annotation) and child.is_goal(self):
                 return child
         return None
 
@@ -509,7 +520,7 @@ class DependencyGraph(object):
         """
         annotations_children = self.get_annotations_of_children(node)
         for sub in annotations_children:
-            if sub.is_goal():
+            if isinstance(sub, Annotation) and sub.is_goal():
                 return True
         return False
 
@@ -530,14 +541,13 @@ class DependencyGraph(object):
         """
 
         # 1:
-        if not annotation_node.status == Annotation.RESOLVED and not annotation_node.status == Annotation.CLOSED and not annotation_node.status == Annotation.COMPLETED:
-            
+        if annotation_node.status == Annotation.OPEN:
             return False
 
         annotations_children = self.get_annotations_of_children(node)
         # subgoal has been set:
         for j in annotations_children:
-            if len(j.item) > 1 and not self.has_subgoal(j.item):
+            if len(j.item.clause) > 1 and not self.has_subgoal(j.item):
                 return False
         # 2
         for h, h_annotation in self.nodes_to_annotations.iteritems():
@@ -546,11 +556,11 @@ class DependencyGraph(object):
                 gTh = annotation_node.gT[h]
 
             index_h_smaller_than_node = False
-            if h_annotation.index <= annotation_node.index:
+            if isinstance(h_annotation, Annotation) and h_annotation.index <= annotation_node.index:
                 index_h_smaller_than_node = True
 
             h_closed = False
-            if h_annotation.status == Annotation.COMPLETED or (h_annotation.status == Annotation.CLOSED and ((not h_annotation.gUnclosed) or h_annotation.gUnclosed <= annotation_node.index)):
+            if isinstance(h_annotation, Annotation) and (h_annotation.status == Annotation.COMPLETED or (h_annotation.status == Annotation.CLOSED and ((not h_annotation.gUnclosed) or h_annotation.gUnclosed <= annotation_node.index))):
                 h_closed = True
 
             if gTh and not index_h_smaller_than_node and not h_closed:
@@ -558,15 +568,15 @@ class DependencyGraph(object):
 
             #if index_h_smaller_than_node and h_closed:
             for j in gTh:
-                frozen_j = model.freeze(j)
-                annotation_j = self.get_annotation(frozen_j)
+                assert isinstance(j, PendingRule)
+                annotation_j = self.get_annotation(j)
                 if annotation_j:
                     if not annotation_j.subgoalindex == len(h_annotation.claims):
                         return False
-                    children_j = self.get_annotations_of_children(frozen_j)
+                    children_j = self.get_annotations_of_children(j)
                     for j_prime in children_j:
                         if j_prime.is_pending_clause():
-                            if not len(j_prime.item) == 1 and not self.has_subgoal(j_prime.item):
+                            if not len(j_prime.item.clause) == 1 and not self.has_subgoal(j_prime.item):
                                 return False
                 else:
                     return False
@@ -628,7 +638,6 @@ class DependencyGraph(object):
 
     def close_node(self, node, annotation_node):
         gd_everywhere_undefined = True
-        
         for h, h_annot in self.nodes_to_annotations.iteritems():
             if h_annot and h_annot.is_goal() and h_annot.index < annotation_node.index:
                 if h in annotation_node.gT and annotation_node.gT[h] and not (h_annot.status == Annotation.CLOSED or h_annot.status == Annotation.COMPLETED):
@@ -670,7 +679,8 @@ class DependencyGraph(object):
         with self:
             if not self.inferencing_clear:
                 self.condition.wait(30)
-            goal_nodes = [n for n in self.nodes_to_annotations.items() if isinstance(n[0][0], int)]
+            goal_nodes = [n for n in self.nodes_to_annotations.items()
+                          if isinstance(n[0], tuple)]
             sorted_highest_index_first = sorted(goal_nodes, key=lambda item: item[1].index, reverse=True)
             for item in sorted_highest_index_first:
                 node = item[0]
@@ -810,9 +820,11 @@ class DependencyGraph(object):
             annotation_goal = self.get_annotation(frozen)
 
         if claim not in annotation_goal.claims:
-            if False: #goal == [1, -1, -2, 3]:
-                import traceback
-                traceback.print_stack()
+            if isinstance(claim, list):
+                claim = model.freeze(claim)
+            elif isinstance(claim, PendingRule):
+                claim = claim.clause
+            assert isinstance(claim, tuple)
             annotation_goal.claims.append(claim)
 
 
@@ -865,6 +877,8 @@ class DependencyGraph(object):
 
         """
         if node in self.graph:
+            for j in self.graph[node]:
+                assert self.get_annotation(j)
             return self.graph[node]
         else:
             return []
@@ -889,8 +903,9 @@ class DependencyGraph(object):
         """
         Gets the external form of node, mostly for debugging printouts.
         """
-        if isinstance(node[0], int):
+        if isinstance(node, PendingRule):
+            return self.state.engine.term_factory.close_literals(node.clause)
+        elif isinstance(node[0], int):
             return self.state.engine.term_factory.close_literal(node)
         else:
             return self.state.engine.term_factory.close_literals(node)
-            

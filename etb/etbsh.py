@@ -211,7 +211,7 @@ class ETBShell(ETBCmdLineClient):
         self._etb_cmds = set(['put_file', 'get_file', 'get_filehandle', 'predicates', 'rules', 'facts'])
         
         self._remote_etb_cmds = set(['find_claims', 'all_claims', 'wait_query',
-                                     'query_answers'])
+                                     'answers'])
         
         self._remote_admin_cmds = set(['connect', 'link', 'tunnel', 'proxylink'])
         ETBCmdLineClient.__init__(self, descr,
@@ -280,7 +280,7 @@ class ETBShell(ETBCmdLineClient):
     def help(self, *args):
         '''help for ETB shell commands
 
-        With no arguments, gives help summary
+        With no arguments, gives help summary.  Otherwise provides help for the given command.
         '''
         if len(args) == 0:
             self.help_summary()
@@ -464,9 +464,9 @@ class ETBShell(ETBCmdLineClient):
     def predicates(self, all=False):
         '''List predicates defined in wrappers'''
         if all:
-            preds = self.etb().get_tool_predicates()
-        else:
             preds = self.etb().get_all_tool_predicates()
+        else:
+            preds = self.etb().get_tool_predicates()
         for pstr in sorted(preds):
             print(pstr)
 
@@ -570,8 +570,8 @@ class ETBShell(ETBCmdLineClient):
         return substs
         
     @query_command
-    def query_answers(self, q):
-        '''query_answers($q): print the answers to a query q'''
+    def answers(self, q):
+        '''answers($q): print the answers to a query q'''
         output = self.etb().query_answers(q)
         if output:
             answers = terms.loads(output)
@@ -914,9 +914,10 @@ class ETBShell(ETBCmdLineClient):
                 self.quit()
             except xmlrpclib.Error as e:
                 print("error:", e)
+                traceback.print_exc(file=sys.stderr)
             except Exception as e:
                 print('Error: {0}'.format(e))
-                #traceback.print_exc(file=sys.stderr)
+                traceback.print_exc(file=sys.stderr)
 
     def process_script(self, scripts, displayOutput=False):
         if not isinstance(scripts, list):
@@ -992,7 +993,7 @@ class ETBShell(ETBCmdLineClient):
         while self.etbproc is not None:
             output = ''
             try:
-                output += out.readline().strip()
+                output += out.readline().rstrip()
             except IOError as ioerr:
                 pass
             except Exception as e:
@@ -1001,8 +1002,9 @@ class ETBShell(ETBCmdLineClient):
                 # out.flush()
                 self.print_etb_output(output)
             if self.etbproc is not None and self.etbproc.poll() is not None:
-                print('etbd is not running...exiting')
-                self.quit(1)
+                #print('etbd is not running...exiting')
+                #self.quit(1)
+                pass
 
 def main():
     try:

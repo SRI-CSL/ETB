@@ -367,7 +367,6 @@ class Engine(object):
         :returntype:
             `None`
 
-
         .. note::
             If the rule is actually a claim, the `external_goal` can be `None`;
             we will call :func:`etb.datalog.engine.Engine.add_claim` in that
@@ -759,7 +758,11 @@ class Engine(object):
 
         """
         internal_goals = self.inference_state.get_goals()
-        return self.term_factory.close_literals(internal_goals)
+        external_goals = self.term_factory.close_literals(internal_goals)
+        # Note that goals can be duplicated - this is because both
+        # internal forms [1, 2, 3] and (1, 2, 3) may be added to db_goals.
+        # Trying to keep just one causes a recursive loop in model.db_add_goal
+        return [g for n,g in enumerate(external_goals) if g not in external_goals[:n]]
 
     def get_claims_matching_goal(self, goal):
         """
@@ -1213,8 +1216,8 @@ class Engine(object):
                 annot = {'kind': ann.kind, 'claims': aclaims, 'status': ann.status}
                 annotations.append(annot)
             else:
-                self.log.error('save_logic_file: goal {0} is {1}, not completed'
-                               .format(goal, ann.status))
+                self.log.error('save_logic_file: goal {0} is {1}, not COMPLETED'
+                               .format(goal, ann.print_status()))
         lstate = [all_claims, all_goals, annotations]
         # print 'save_logic_file: claims  {0}'.format(all_claims)
         #print 'save_logic_file: goals   {0}'.format(all_goals)

@@ -134,7 +134,7 @@ class InterpretState(object):
                 else:
                     self.log.error('Goal %s is interpreted but invalid with error: "%s"'
                                    % (goal, e))
-            traceback.print_exc()
+            #traceback.print_exc()
             return False
 
     def _validate_args(self, goal):
@@ -152,24 +152,29 @@ class InterpretState(object):
         for argspec, arg in zip(argspecs,goal_args):
             if arg.is_var():
                 if argspec.mode == '+':
-                    error_string = 'Argument %s should be a value, not %s; validate_args unhappy' % (argspec, arg)
+                    error_string = 'Argument %s should be a value, not variable "%s"' % (argspec, arg)
                     self.log.error(error_string)
                     raise TypeError(error_string)
                 else:
                     args.append(arg)
+            else:
+                if argspec.mode == '-':
+                    error_string = 'Argument %s should be a variable, not "%s"' % (argspec, arg)
+                    self.log.error(error_string)
+                    raise TypeError(error_string)
 
-            elif argspec.kind == 'file':
-                args.append(self._validate_fileref(arg, pred, argspec.name))
+                elif argspec.kind == 'file':
+                    args.append(self._validate_fileref(arg, pred, argspec.name))
 
-            # files is a list of filerefs or (recursively) files
-            elif argspec.kind == 'files':
-                args.append(self._validate_files_args(arg, pred, argspec.name))
+                # files is a list of filerefs or (recursively) files
+                elif argspec.kind == 'files':
+                    args.append(self._validate_files_args(arg, pred, argspec.name))
                 
-            elif argspec.kind == 'handle':
-                args.append(self._validate_handle(arg))
+                elif argspec.kind == 'handle':
+                    args.append(self._validate_handle(arg))
 
-            else :
-                args.append(arg)
+                else :
+                    args.append(arg)
 
         return args
 
@@ -236,6 +241,7 @@ class InterpretState(object):
         self.log.debug('_handle_output_new_api: output {0}'.format(output))
         rules = output.get_pending_rules(goal)
         self.log.debug('_handle_output_new_api: rules {0}'.format(rules))
+        self.etb.engine.inference_state.logical_state.db_move_stuck_goal_to_goal(internal_goal)
         if not rules:
             claims = output.get_claims(goal)
             self.log.debug('_handle_output_new_api: claims {0}'.format(claims))
@@ -248,7 +254,6 @@ class InterpretState(object):
                     self.etb.engine.push_no_solutions(goal)
                 else:
                     self.etb.engine.add_claims(claims)
-
             self.add_results(goal, claims)
         else:
             for r in rules : 

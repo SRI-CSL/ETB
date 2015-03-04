@@ -30,6 +30,8 @@ import xmlrpclib
 import weakref
 import codecs, base64
 import re
+from functools import wraps
+import traceback
 
 import terms
 import parser
@@ -237,10 +239,22 @@ class WithIpHandler(SimpleXMLRPCServer.SimpleXMLRPCRequestHandler):
         SimpleXMLRPCServer.SimpleXMLRPCRequestHandler.__init__(
             self, request, client_address, server)
 
+# def _export(method):
+#     """Decorator for functions that are exported through xmlrpc."""
+#     method._etb_export = True
+#     return method
+
 def _export(method):
     """Decorator for functions that are exported through xmlrpc."""
     method._etb_export = True
-    return method
+    @wraps(method)
+    def _method(*args, **kwargs):
+        try:
+            return method(*args, **kwargs)
+        except:
+            traceback.print_exc()
+            raise
+    return _method
 
 class Networking(SocketServer.ThreadingMixIn,
                  SimpleXMLRPCServer.SimpleXMLRPCServer):
@@ -793,7 +807,6 @@ class Networking(SocketServer.ThreadingMixIn,
         """Returns the status of a running query."""
         return qid in self.etb.done_queries
 
-    #ported to etb3
     @_export
     def query_wait(self, qid):
         """Block until a query is complete."""
@@ -805,7 +818,7 @@ class Networking(SocketServer.ThreadingMixIn,
             return True
         for goal in goals: #stjin: this is only 1 goal always I think, but it's a list..
             number = 0
-            while not self.etb.engine.is_completed(goal):
+            while number < 2 and not self.etb.engine.is_completed(goal):
                 self.etb.engine.close()
                 if False: #number > 100:
                     filename = self.etb.engine.goal_deps_to_png(goal)
@@ -845,7 +858,6 @@ class Networking(SocketServer.ThreadingMixIn,
             files += png
         return files
 
-    #new in etb3
     @_export
     def query_show_goal_dependencies(self, qid):
         goals = self.etb.get_query(qid)
@@ -858,19 +870,16 @@ class Networking(SocketServer.ThreadingMixIn,
         file = self.etb.engine.goal_deps_to_png(goal)
         return file
 
-    #new in etb3
     @_export
     def query_close(self):
         self.etb.engine.close()
         return True
 
-    #new in etb3
     @_export
     def query_complete(self):
         self.etb.engine.complete()
         return True
 
-    #new in etb3
     @_export
     def query_is_completed(self, qid):
         goals = self.etb.get_query(qid)
@@ -966,7 +975,6 @@ class Networking(SocketServer.ThreadingMixIn,
 #        str = terms.dumps_readably(claim_entries)
 #        return terms.loads(str)
 
-    #modified for etb3
     @_export
     def get_all_claims(self):
         """Get all the claims known by this node, as a JSON list"""
