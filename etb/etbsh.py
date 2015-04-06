@@ -28,6 +28,10 @@ import subprocess
 import pprint
 import re
 import xmlrpclib
+import readline
+import fcntl
+import termios
+import struct
 import time
 from string import Template
 from functools import wraps
@@ -662,7 +666,8 @@ class ETBShell(ETBCmdLineClient):
         try:
             self.etb().query_wait(q)
         except KeyboardInterrupt:
-            print("Interrupted!")
+            print("Caught KeyboardInterrupt!")
+            self.etb().query_wait_interrupt(q)
         output = self.etb().query_answers(q)
         res = self.translate_answers(output)
         if res == []:
@@ -890,6 +895,7 @@ class ETBShell(ETBCmdLineClient):
                 print("Exception occured:", e)
                 traceback.print_exc(file=sys.stderr)
         else:
+            print('doing query: cmd = {0}'.format(cmd))
             if len(args) > 0:
                 output = self.query('%s(%s)' % (cmd, ','.join([ str(a) for a in args])))
             else:
@@ -900,11 +906,13 @@ class ETBShell(ETBCmdLineClient):
                 print(output)
         
     def interact(self):
+        global prompted
         while True:
             try:
                 #self.read_from_etb()
                 # Give ETB a chance to print.
                 # sleep(.1)
+                prompted = True
                 command = raw_input(self.config.prompt_string).strip()
                 self.process(command)
                 #self.read_from_etb()
@@ -974,7 +982,21 @@ class ETBShell(ETBCmdLineClient):
                 self.etbproc.kill()
         self.etbproc = None
 
+    def blank_current_readline(self):
+        # Next line said to be reasonably portable for various Unixes
+        (rows,cols) = struct.unpack('hh', fcntl.ioctl(sys.stdout, termios.TIOCGWINSZ,'1234'))
+
+        text_len = len(readline.get_line_buffer())+2
+
+        # ANSI escape sequences (All VT100 except ESC[0G)
+        sys.stdout.write('\x1b[2K')                         # Clear current line
+        sys.stdout.write('\x1b[1A\x1b[2K'*(text_len/cols))  # Move cursor up and clear line
+        sys.stdout.write('\x1b[0G')                         # Move to start of line
+
     def print_etb_output(self, output):
+        global prompted
+        if prompted:
+            self.blank_current_readline()
         for line in output.splitlines(False):
             if re.search('INFO:', line):
                 print(self.config.info_color + line + Style.RESET_ALL)
@@ -984,6 +1006,10 @@ class ETBShell(ETBCmdLineClient):
                 print(self.config.error_color + line + Style.RESET_ALL)
             else:
                 print(self.config.text_color + line + Style.RESET_ALL)
+        if prompted:
+            sys.stdout.write(self.config.prompt_string.translate(None, '\x01\x02')
+                             + readline.get_line_buffer())
+            sys.stdout.flush()
 
     def read_etb_stdout(self):
         out = self.etbproc.stdout
@@ -1032,7 +1058,7 @@ def main():
         s.etbproc = None
         if not s.config.noetb:
             s.start_etb(s.config.port, s.config.debuglevel)
-        time.sleep(2)
+        #time.sleep(2)
         if s.config.batch:
             if s.config.load:
                 s.process(s.config.load, displayOutput=False)

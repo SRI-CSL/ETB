@@ -88,7 +88,7 @@ class ETBNode(object):
         self._process = subprocess.Popen(['etbd'],
                                          cwd=self._directory,
                                          shell=False,
-                                         stdout=of,
+                                         #stdout=of,
                                          stderr=subprocess.STDOUT)
         self._etb = ETBClient()
         self._etb.set_url('localhost', self._port)

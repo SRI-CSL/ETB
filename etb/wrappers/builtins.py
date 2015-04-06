@@ -29,11 +29,16 @@ class Builtins(Tool):
 
     @Tool.sync
     @Tool.volatile
-    @Tool.predicate('-a: value, b: value')
+    @Tool.predicate('a: value, b: value')
     def equal(self, a, b):
         """Unify the two terms"""
         if b.is_var():
+            if a.is_var():
+                return Failure(self)
             subst = a.unify(b)
+            return Failure(self) if subst is None else Substitutions(self, [subst])
+        if a.is_var():
+            subst = b.unify(a)
             return Failure(self) if subst is None else Substitutions(self, [subst])
         elif a.val == b.val:
             return Success(self) 
@@ -144,7 +149,7 @@ class Builtins(Tool):
         except subprocess.CalledProcessError as e:
             return Failure(self)  # TODO error claims
 
-    @Tool.predicate('+cmd: Value, +timestamp, -result: Value')
+    @Tool.predicate('+cmd: Value, +timestamp: Value, -result: Value')
     def popen_at(self, cmd, timestamp, result):
         """Runs a shell command and get the (text) result back.  The timestamp
         can be anything, its purpose is to repeat an action that would

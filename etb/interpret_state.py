@@ -200,8 +200,6 @@ class InterpretState(object):
             # Need this, or interpreted goal never completed
             self.etb.engine.add_claims(claims)
             self.add_results(goal, claims)
-            # This is ill-formed
-            # self.etb.engine.inference_state.logical_state.db_move_stuck_goal_to_goal(goal)
             return
         try:
             args = self._validate_args(goal)
@@ -241,21 +239,22 @@ class InterpretState(object):
         self.log.debug('_handle_output_new_api: output {0}'.format(output))
         rules = output.get_pending_rules(goal)
         self.log.debug('_handle_output_new_api: rules {0}'.format(rules))
-        self.etb.engine.inference_state.logical_state.db_move_stuck_goal_to_goal(internal_goal)
+        self.etb.engine.inference_state.move_stuck_goal_to_goal(internal_goal)
+        annot = self.etb.engine.inference_state.logical_state.db_get_annotation(internal_goal)
+        assert annot.status == 2
         if not rules:
+            # Failure or Errors
             claims = output.get_claims(goal)
             self.log.debug('_handle_output_new_api: claims {0}'.format(claims))
-            if not claims:
-                self.etb.engine.push_no_solutions(goal)
-            else: 
+            if claims:
+                assert isinstance(output, wrapper.Errors)
                 self.log.debug('_handle_output_new_api: adding claims {0}'.format(claims))
-                if isinstance(output, wrapper.Errors):
-                    self.etb.engine.add_errors(goal, claims)
-                    self.etb.engine.push_no_solutions(goal)
-                else:
-                    self.etb.engine.add_claims(claims)
+                self.etb.engine.add_errors(goal, claims)
+            self.etb.engine.push_no_solutions(goal)
             self.add_results(goal, claims)
         else:
+            # Success, Substitutions, or Lemmata
+            # Note that claims are ignored in this case
             for r in rules : 
                 self.log.debug('Adding new rule: {0} with goal {1}'.format(r, goal))
                 self.etb.engine.add_pending_rule(r, goal, internal_goal)
@@ -267,14 +266,18 @@ class InterpretState(object):
             self.etb.engine.push_no_solutions(goal)
         else:
             for obj in output:
-                self.log.debug('_process_output: obj %s of type %s' % (obj, type(obj)))
                 if isinstance(obj, terms.Claim):
                     pred = obj.literal.get_pred()
                     if pred == terms.IdConst('error'):
                         self.etb.engine.add_errors(goal, [obj])
                     else:
-                        claim = terms.Claim(obj.literal, obj.reason)
-                        self.etb.engine.add_claim(claim)
+                        # claim = terms.Claim(obj.literal, obj.reason)
+                        igoal = self.etb.engine.term_factory.mk_literal(goal)
+                        self.etb.engine.inference_state.set_goal_to_resolved(igoal)
+                        prule = terms.InferenceRule(obj.literal, [], temp=True)
+                        self.log.info('_process_output: reason = {0}'.format(obj.reason))
+                        self.etb.engine.add_pending_rule(prule, goal, igoal)
+                        #self.etb.engine.add_claim(prule, obj.reason)
                 else:
                     if isinstance(obj, dict):
                         obj = terms.Subst(obj)
@@ -367,7 +370,7 @@ class InterpretState(object):
         assert isinstance(goal, terms.Literal), 'is_interpreted: goal {0}: {1} not a Literal'.format(goal, type(goal))
         self.log.debug('is_interpreted: %s', goal)
         pred = goal.first_symbol()
-        
+
         is_interp = pred in self._handlers or \
                     self.etb.networking.neighbors_able_to_interpret(pred) or \
                     self.etb.networking.links_able_to_interpret(pred)

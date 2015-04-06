@@ -279,8 +279,8 @@ class ETB(object) :
         # only deal with queries that contain 1 goal
         self.engine.to_dot(fact, f)
 
-    def update_predicates(self):
-        self.engine.check_stuck_goals()
+    def update_predicates(self, newpreds):
+        self.engine.check_stuck_goals(newpreds)
 
     def clear_claims_table(self):
         """Totally clear the content of the engine and interpret_state.
@@ -446,7 +446,7 @@ class ETB(object) :
                     .format(subst, type(subst))
             output.append(subst)
         self.log.debug('process_interpreted_goal_answer: about to process claims {0}: {1}'
-                      .format(answer['claims'], output))
+                       .format(answer['claims'], output))
         for c in answer['claims']:
             assert isinstance(c, terms.Claim),\
                 'process_interpreted_goal_answer: should be a Claim, {0}: {1}'\

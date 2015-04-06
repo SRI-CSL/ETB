@@ -2,8 +2,9 @@ from ... import terms
 from ... import parser
 from .. import index
 from .. import model
-import unittest
 from .. import engine
+from .. import graph
+import unittest
 import os
 
 class TestModel(unittest.TestCase):
@@ -155,12 +156,14 @@ class TestModel(unittest.TestCase):
 
         clause = terms.Clause(qab, [pXY, iXb])
         internal_clause = self.tf.mk_clause(clause)
+        prule = graph.PendingRule(internal_clause)
         
         resolved_clause = terms.Clause(qab, [iab])
         internal_resolved_clause = self.tf.mk_clause(resolved_clause)
+        claim_expl = model.create_axiom_explanation()
 
         # note that in explanation1 the 2nd argument is a claim (a list of a # list of integers)
-        explanation1 = model.create_resolution_bottom_up_explanation(internal_clause, [self.tf.mk_literal(pab)])
+        explanation1 = model.create_resolution_bottom_up_explanation(prule, [self.tf.mk_literal(pab)], claim_expl)
         explanation2 = model.create_resolution_top_down_explanation(internal_clause, self.tf.mk_literal(pab))
         explanation3 = model.create_external_explanation()
         explanation4 = model.create_axiom_explanation()
@@ -322,10 +325,11 @@ class TestModel(unittest.TestCase):
         self.assertEqual(expected_clause, new_clause)
 
     def test_create_resolution_bottom_up_explanation(self):
-        from_clause = [[1,2,4],[1,3,5]]
+        from_clause = graph.PendingRule([[1,2,4],[1,3,5]])
         from_claim = [[1,3,5]]
-        explanation = model.create_resolution_bottom_up_explanation(from_clause, from_claim)
-        self.assertEqual(explanation, ("ResolutionBottomUp", from_clause, from_claim))
+        claim_expl = model.create_axiom_explanation()
+        explanation = model.create_resolution_bottom_up_explanation(from_clause, from_claim, claim_expl)
+        self.assertEqual(explanation, ("ResolutionBottomUp", from_clause, from_claim, claim_expl))
 
     def test_create_resolution_top_down_explanation(self):
         from_clause = [[1,2,4],[1,3,5]]
@@ -335,29 +339,31 @@ class TestModel(unittest.TestCase):
 
     def test_create_axiom_explanation(self):
         explanation = model.create_axiom_explanation()
-        self.assertEqual(explanation, ("Axiom", None))
+        self.assertEqual(explanation, ("Axiom",))
 
     def test_create_external_explanation(self):
         explanation = model.create_external_explanation()
-        self.assertEqual(explanation, ("External", None))
+        self.assertEqual(explanation, ("External",))
 
 
     def test_is_bottom_up_explanation(self):
-        from_clause = [[1,2,4],[1,3,5]]
+        from_clause = graph.PendingRule([[1,2,4],[1,3,5]])
         from_claim = [[1,3,5]]
-        explanation = model.create_resolution_bottom_up_explanation(from_clause, from_claim)
+        claim_expl = model.create_axiom_explanation()
+        explanation = model.create_resolution_bottom_up_explanation(from_clause, from_claim, claim_expl)
         self.assertTrue(model.is_bottom_up_explanation(explanation))
 
     def test_is_top_down_explanation(self):
-        from_clause = [[1,2,4],[1,3,5]]
+        from_clause = ((1,2,4),(1,3,5))
         from_goal = [1,3,5]
         explanation = model.create_resolution_top_down_explanation(from_clause, from_goal)
         self.assertTrue(model.is_top_down_explanation(explanation))
 
     def test_get_rule_from_explanation(self):
-        from_clause = [[1,2,4],[1,3,5]]
+        from_clause = graph.PendingRule([[1,2,4],[1,3,5]])
         from_claim = [[1,3,5]]
-        explanation = model.create_resolution_bottom_up_explanation(from_clause, from_claim)
+        claim_expl = model.create_axiom_explanation()
+        explanation = model.create_resolution_bottom_up_explanation(from_clause, from_claim, claim_expl)
         self.assertEqual(from_clause, model.get_rule_from_explanation(explanation))
 
     def test_get_goal_from_explanation(self):
@@ -416,18 +422,23 @@ class TestModel(unittest.TestCase):
         self.logical_state.clear()
         qab = parser.parse_literal('q(a, b)')
         internal_claim = [self.tf.mk_literal(qab)]
-        self.assertFalse(self.logical_state.db_mem_claim(internal_claim))
-        self.logical_state.db_add_claim(internal_claim)
-        self.assertTrue(self.logical_state.db_mem_claim(internal_claim))
+        prule = self.logical_state.db_add_pending_rule(internal_claim)
+        self.assertFalse(self.logical_state.db_mem_claim(prule))
+        self.logical_state.db_add_claim(prule)
+        self.assertTrue(self.logical_state.db_mem_claim(prule))
 
     def test_add_claim(self):
         qab = parser.parse_literal('q(a, b)')
         clause2 = terms.Clause(qab, [])
         i_clause2 = self.tf.mk_clause(clause2)
         qab_test = parser.parse_literal('q(a, b)')
-        internal_literal = self.tf.mk_literal(qab_test)
-        self.logical_state.db_add_claim(i_clause2)
-        self.assertTrue([internal_literal] in index.get_candidate_specializations(self.logical_state.db_claims,internal_literal))
+        internal_literal = model.freeze(self.tf.mk_literal(qab_test))
+        prule = self.logical_state.db_add_pending_rule(i_clause2)
+        self.logical_state.db_add_claim(prule)
+        specializations = [prule.clause for prule in index.get_candidate_specializations(self.logical_state.db_claims,internal_literal)]
+        print('internal_literal = {0}'.format(internal_literal))
+        print('specials = {0}'.format(specializations))
+        self.assertTrue((internal_literal,) in specializations)
 
     def test_db_add_goal(self):
         qab = parser.parse_literal('q(a, b)')
@@ -442,34 +453,34 @@ class TestModel(unittest.TestCase):
         pab = parser.parse_literal('p(a, b)')
         int1 = self.tf.mk_literal(qab)
         int2 = self.tf.mk_literal(pab)
-        pending = [int1, int2]
+        pending = self.logical_state.goal_dependencies.add_pending_rule([int1, int2])
         self.logical_state.db_add_goal_to_pending_rule(int1, pending)
         self.assertTrue(model.freeze(int1) in self.logical_state.goal_dependencies.nodes_to_annotations)
-        self.assertTrue(model.freeze(pending) in self.logical_state.goal_dependencies.graph[model.freeze(int1)])
+        self.assertTrue(pending in self.logical_state.goal_dependencies.graph[model.freeze(int1)])
 
     def test_db_add_pending_rule_to_goal(self):
         qab = parser.parse_literal('q(a, b)')
         pab = parser.parse_literal('p(a, b)')
         int1 = self.tf.mk_literal(qab)
         int2 = self.tf.mk_literal(pab)
-        pending = [int1, int2]
+        pending = self.logical_state.goal_dependencies.add_pending_rule([int1, int2])
         self.logical_state.db_add_pending_rule_to_goal(pending, int1)
         self.assertTrue(model.freeze(int1) in self.logical_state.goal_dependencies.nodes_to_annotations)
-        self.assertTrue(model.freeze(int1) in self.logical_state.goal_dependencies.graph[model.freeze(pending)])
+        self.assertTrue(model.freeze(int1) in self.logical_state.goal_dependencies.graph[pending])
 
     def test_db_add_pending_rule_to_pending_rule(self):
         qab = parser.parse_literal('q(a, b)')
         pab = parser.parse_literal('p(a, b)')
         int1 = self.tf.mk_literal(qab)
         int2 = self.tf.mk_literal(pab)
-        pending1 = [int1, int2]
-        pending2 = [int2, int1]
+        pending1 = self.logical_state.goal_dependencies.add_pending_rule([int1, int2])
+        pending2 = self.logical_state.goal_dependencies.add_pending_rule([int2, int1])
         self.logical_state.db_add_pending_rule_to_pending_rule(pending1, pending2)
-        self.assertTrue(model.freeze(pending2) in self.logical_state.goal_dependencies.graph[model.freeze(pending1)])
-        self.assertFalse(model.freeze(pending1) in self.logical_state.goal_dependencies.graph[model.freeze(pending2)])
+        self.assertTrue(pending2 in self.logical_state.goal_dependencies.graph[pending1])
+        self.assertFalse(pending1 in self.logical_state.goal_dependencies.graph[pending2])
         self.logical_state.db_add_pending_rule_to_pending_rule(pending2, pending1)
-        self.assertTrue(model.freeze(pending2) in self.logical_state.goal_dependencies.graph[model.freeze(pending1)])
-        self.assertTrue(model.freeze(pending1) in self.logical_state.goal_dependencies.graph[model.freeze(pending2)])
+        self.assertTrue(pending2 in self.logical_state.goal_dependencies.graph[pending1])
+        self.assertTrue(pending1 in self.logical_state.goal_dependencies.graph[pending2])
 
     def test_add_clause_head(self):
         qab = parser.parse_literal('q(a, b)')
@@ -507,11 +518,15 @@ class TestModel(unittest.TestCase):
 
         clause = terms.Clause(qab, [pXY, iXb])
         internal_clause = self.tf.mk_clause(clause)
+        prule = graph.PendingRule(internal_clause)
+
+        claim = self.tf.mk_clause(terms.Clause(pab, []))
         
         resolved_clause = terms.Clause(qab, [iab])
         internal_resolved_clause = self.tf.mk_clause(resolved_clause)
 
-        explanation = model.create_resolution_bottom_up_explanation(internal_clause, self.tf.mk_literal(pab))
+        claim_expl = model.create_axiom_explanation()
+        explanation = model.create_resolution_bottom_up_explanation(prule, claim, claim_expl)
         self.logical_state.db_add_clause(internal_resolved_clause, explanation)
         self.assertEqual(explanation, self.logical_state.db_get_explanation(internal_resolved_clause))
 
@@ -519,14 +534,14 @@ class TestModel(unittest.TestCase):
         self.logical_state.clear()
         pong1 = self.tf.mk_literal(parser.parse_literal('pong(1)'))
         ping0 = self.tf.mk_literal(parser.parse_literal('ping(0)'))
-        pending = [pong1, ping0]
+        pending = self.logical_state.goal_dependencies.add_pending_rule([pong1, ping0])
 
         self.logical_state.db_add_goal_to_pending_rule(pong1, pending)
         self.logical_state.db_add_pending_rule_to_goal(pending, ping0)
         self.logical_state.db_move_goal_to_stuck(pong1)
         self.logical_state.db_move_goal_to_stuck(ping0)
 
-        self.assertFalse(self.logical_state.no_stuck_subgoals(pending))
+        #self.assertFalse(self.logical_state.no_stuck_subgoals(pending))
         self.assertFalse(self.logical_state.no_stuck_subgoals(pong1))
         self.assertFalse(self.logical_state.no_stuck_subgoals(ping0))
 

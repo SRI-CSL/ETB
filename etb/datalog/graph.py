@@ -116,6 +116,8 @@ class Annotation(object):
         self.subgoalindex = 0
         # the claims matching this goal
         self.claims = []
+        # the explanations matching this goal, corresponding to the claims
+        self.explanations = []
         # status
         self.status = Annotation.OPEN
 
@@ -352,10 +354,11 @@ class DependencyGraph(object):
         assert isinstance(prule, PendingRule)
         assert self.get_annotation(prule)
         self.graph[model.freeze(goal)].append(prule)
-        if not prule in self.parents:
+        if not prule in self.parents or not self.parents[prule]:
             self.parents[prule] = [model.freeze(goal)]
         else:
-            self.parents[prule].append(model.freeze(goal))
+            raise
+            #self.parents[prule].append(model.freeze(goal))
 
     def add_pending_rule_to_pending_rule(self, rule1, rule2):
         """
@@ -564,6 +567,7 @@ class DependencyGraph(object):
                 h_closed = True
 
             if gTh and not index_h_smaller_than_node and not h_closed:
+                print('#2a')
                 return False
 
             #if index_h_smaller_than_node and h_closed:
@@ -572,13 +576,21 @@ class DependencyGraph(object):
                 annotation_j = self.get_annotation(j)
                 if annotation_j:
                     if not annotation_j.subgoalindex == len(h_annotation.claims):
+                        print('#2b goal = {0}'.format(self.external_form(node)))
+                        print('#2b j = {0}'.format(self.external_form(j)))
+                        print('#2b h = {0}'.format(self.external_form(h)))
+                        print('annotation_j.subgoalindex = {0}, len(h_annotation.claims) = {1}'
+                              .format(annotation_j.subgoalindex, len(h_annotation.claims)))
+                        print('h_annotation.claims = {0}'.format(h_annotation.claims))
                         return False
                     children_j = self.get_annotations_of_children(j)
                     for j_prime in children_j:
                         if j_prime.is_pending_clause():
                             if not len(j_prime.item.clause) == 1 and not self.has_subgoal(j_prime.item):
+                                print('#2c')
                                 return False
                 else:
+                    print('#2d')
                     return False
         return True
 
@@ -796,7 +808,7 @@ class DependencyGraph(object):
         else:
             return False
 
-    def add_claim(self, goal, claim):
+    def add_claim(self, goal, claim, explanation):
         """
         Add a claim to the goal in the graph. This updates the `claims` field
         for an :class:`etb.datalog.graph.Annotation` corresponding to `goal
@@ -819,14 +831,17 @@ class DependencyGraph(object):
             self.add_goal(goal)
             annotation_goal = self.get_annotation(frozen)
 
-        if claim not in annotation_goal.claims:
-            if isinstance(claim, list):
-                claim = model.freeze(claim)
-            elif isinstance(claim, PendingRule):
-                claim = claim.clause
-            assert isinstance(claim, tuple)
-            annotation_goal.claims.append(claim)
-
+        if isinstance(claim, list):
+            fclaim = model.freeze(claim)
+        elif isinstance(claim, PendingRule):
+            fclaim = claim.clause
+        else:
+            fclaim = claim
+        if fclaim not in annotation_goal.claims:
+            assert isinstance(fclaim, tuple)
+            annotation_goal.claims.append(fclaim)
+            self.log.info('graph.add_claim: explanation = {0}'.format(explanation))
+            annotation_goal.explanations.append(explanation)
 
     def __node_is_present(self, node):
         return node in self.nodes_to_annotations

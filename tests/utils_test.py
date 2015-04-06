@@ -23,15 +23,15 @@ class UtilsTest(ETBTest):
 
     
 def main():
-    if False:
+    if True:
         with ETBNetwork('single node ETB',
                         { 'port': 26532, 'wrappers': ['utils']}) as etb:
             UtilsTest(etb).run()
             
-    with ETBNetwork('two nodes ETB',
-                    { 'port': 26532 },
-                    { 'port': 26533, 'wrappers': ['utils']}) as etb:
-        UtilsTest(etb).run()
+    # with ETBNetwork('two nodes ETB',
+    #                 { 'port': 26532 },
+    #                 { 'port': 26533, 'wrappers': ['utils']}) as etb:
+    #     UtilsTest(etb).run()
 
 if __name__ == '__main__':
     main()

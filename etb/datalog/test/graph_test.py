@@ -22,9 +22,8 @@ class TestGraph(unittest.TestCase):
 
     def test_add_pending_rule_get_annotation(self):
         self.graph.clear()
-        rule = [[1,2,3], [3,4,5]]
-        self.graph.add_pending_rule(rule)
-        annotation = self.graph.get_annotation(model.freeze(rule))
+        rule = self.graph.add_pending_rule([[1,2,3], [3,4,5]])
+        annotation = self.graph.get_annotation(rule)
         self.assertEqual(annotation.kind, graph.Annotation.PENDING_CLAUSE)
 
     def test_global_time(self):
@@ -37,24 +36,24 @@ class TestGraph(unittest.TestCase):
         node1 = [1,2,4]
         annotation1 = graph.Annotation(model.freeze(node1),graph.Annotation.GOAL, self.logical_state)
 
-        pending1 = [[1,2,-1],[2,3,5]]
-        pending2 = [[1,2,-1],[7,8]]
+        pending1 = self.graph.add_pending_rule([[1,2,-1],[2,3,5]])
+        pending2 = self.graph.add_pending_rule([[1,2,-1],[7,8]])
         self.graph.add_goal_to_pending_rule(node1, pending1)
         self.graph.add_goal_to_pending_rule(node1, pending2)
 
         children = self.graph.get_annotations_of_children(model.freeze(node1))
         self.assertTrue(len(children)==2)
-        self.assertTrue(children[0].item == model.freeze(pending1))
-        self.assertTrue(children[1].item == model.freeze(pending2))
+        self.assertEqual(children[0].item.clause, pending1.clause)
+        self.assertEqual(children[1].item.clause, pending2.clause)
 
     def test_has_subgoal(self):
-        pending1 = [[1,2,-1],[2,3,5]]
-        pending2 = [[1,2,-1],[7,8]]
+        pending1 = self.graph.add_pending_rule([[1,2,-1],[2,3,5]])
+        pending2 = self.graph.add_pending_rule([[1,2,-1],[7,8]])
         node1 = [2,3,5]
         self.graph.add_goal(node1)
         self.graph.add_pending_rule_to_goal(pending1, node1)
-        self.assertTrue(self.graph.has_subgoal(model.freeze(pending1)))
-        self.assertFalse(self.graph.has_subgoal(model.freeze(pending2)))
+        self.assertTrue(self.graph.has_subgoal(pending1))
+        self.assertFalse(self.graph.has_subgoal(pending2))
 
     def test_can_close_to_goal_be_applied1(self):
         node1 = [1,2,4]
@@ -66,10 +65,10 @@ class TestGraph(unittest.TestCase):
         annotation1 = graph.Annotation(model.freeze(node1),graph.Annotation.GOAL, self.logical_state)
         annotation1.status = graph.Annotation.RESOLVED
 
-        pending = [[1,2,-1],[2,3,5]]
+        pending = self.graph.add_pending_rule([[1,2,-1],[2,3,5]])
         self.graph.add_goal_to_pending_rule(node1, pending)
 
-        # no subgoal preent for that pending rule though so should not be
+        # no subgoal present for that pending rule though so should not be
         # applicable for closing
         self.assertFalse(self.graph.can_close_to_goal_be_applied(model.freeze(node1), annotation1))
 

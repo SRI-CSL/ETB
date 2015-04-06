@@ -20,8 +20,6 @@ class TestInference(unittest.TestCase):
         #self.engine = engine.Engine(self.interpret_state)
         self.inference = inference.Inference(self.logical_state, self.interpret_state, self.tf, self.engine)
 
-        X = terms.mk_var("X")
-        Y = terms.mk_var("Y")
         pab = parser.parse_literal('p(a, b)')
         qab = parser.parse_literal('q(a, b)')
         qXb = parser.parse_literal('q(X, b)')
@@ -32,17 +30,23 @@ class TestInference(unittest.TestCase):
 
         candidate_pending = terms.Clause(qab, [pXY, iXb])
         resolved_clause = terms.Clause(qab, [iab])
+        fact = terms.Clause(pab, [])
         rule1 = terms.Clause(qXb, [pXY, iXb])
         rule2 = terms.Clause(qab, [paY, iab])
 
-        self.i_claim = [self.tf.mk_literal(pab)]
+        self.i_claim = model.freeze(self.tf.mk_literal(pab))
         self.i_goal = self.tf.mk_literal(pXY)
         self.i_goal2 = self.tf.mk_literal(qab)
         self.i_goal3 = self.tf.mk_literal(paY)
+        self.i_goal4 = self.tf.mk_literal(pab)
         self.i_candidate_pending = self.tf.mk_clause(candidate_pending)
         self.i_resolved_clause = self.tf.mk_clause(resolved_clause)
-        self.i_rule1 = self.tf.mk_clause(rule1)
-        self.i_rule2 = self.tf.mk_clause(rule2)
+        self.i_fact = self.logical_state.db_add_pending_rule(self.tf.mk_clause(fact))
+        self.inference.update_goal(self.i_fact, self.i_goal4)
+        self.i_rule1 = self.logical_state.db_add_pending_rule(self.tf.mk_clause(rule1))
+        self.inference.update_goal(self.i_rule1, self.i_goal2)
+        self.i_rule2 = self.logical_state.db_add_pending_rule(self.tf.mk_clause(rule2))
+        self.inference.update_goal(self.i_rule2, self.i_goal2)
 
     # def test_resolve_claim(self):
     #     self.logical_state.db_add_pending_rule(self.i_candidate_pending)
@@ -71,10 +75,11 @@ class TestInference(unittest.TestCase):
         # only added once
         self.logical_state.clear()
         self.inference.lock()
-        self.inference.add_claim(self.i_claim, None)
-        self.inference.add_claim(self.i_claim, None)
+        self.inference.add_claim(self.i_fact, None)
+        self.inference.add_claim(self.i_fact, None)
         self.inference.unlock()
-        self.assertItemsEqual([self.i_claim], self.inference.get_claims())
+        claims = list({iclaim.clause[0] for iclaim in self.inference.get_claims()})
+        self.assertItemsEqual([self.i_claim], claims)
 
     def test_add_pending_rule(self):
         self.logical_state.clear()
@@ -94,7 +99,7 @@ class TestInference(unittest.TestCase):
         self.inference.unlock()
 
         self.assertTrue(result)
-        self.assertItemsEqual([new_pending_rule], self.logical_state.db_get_pending_rules())
+        self.assertItemsEqual([new_pending_rule.clause], map(lambda c: model.freeze_clause(c), self.logical_state.db_get_pending_rules()))
 
     def test_is_stuck_goal(self):
         self.inference.clear()
@@ -104,8 +109,12 @@ class TestInference(unittest.TestCase):
         self.inference.add_goal(goal)
         self.assertTrue(self.inference.is_stuck_goal(goal))
         # Something has to push it to check whether now solutions have arrived
-        self.inference.add_claim([goal], model.create_external_explanation())
-        self.inference.check_stuck_goals()
+        clause = terms.Clause(lt, [])
+        rule = self.tf.mk_clause(clause)
+        explanation = model.create_external_explanation()
+        prule = self.inference.logical_state.db_add_pending_rule(rule)
+        #self.inference.add_claim(prule, model.create_external_explanation())
+        self.inference.check_stuck_goals(['lt'])
         self.inference.unlock()
         self.assertFalse(self.inference.is_stuck_goal(goal))
 
@@ -119,8 +128,12 @@ class TestInference(unittest.TestCase):
         self.inference.add_goal(goal)
         self.inference.unlock()
 
-        self.assertItemsEqual([new_pending_rule], self.logical_state.db_get_pending_rules())
-        self.assertItemsEqual([goal, new_pending_rule[1]], self.logical_state.db_get_all_goals())
+        self.assertItemsEqual([new_pending_rule.clause],
+                              map(lambda c: model.freeze_clause(c),
+                                  self.logical_state.db_get_pending_rules()))
+        self.assertItemsEqual([model.freeze(goal), new_pending_rule.clause[1]],
+                              map(lambda g: model.freeze(g),
+                                  self.logical_state.db_get_all_goals()))
 
 
     def test_add_rule(self):
@@ -134,9 +147,9 @@ class TestInference(unittest.TestCase):
         self.inference.add_rule(kb_rule, None)
         self.inference.unlock()
         # resolved kb rule should be pending
-        self.assertItemsEqual([resolved_rule], self.logical_state.db_get_pending_rules())
+        self.assertItemsEqual([resolved_rule.clause], map(model.freeze_clause, self.logical_state.db_get_pending_rules()))
         # and the goal should done
-        self.assertItemsEqual([goal, resolved_rule[1]], self.logical_state.db_get_all_goals())
+        self.assertItemsEqual([goal, list(resolved_rule.clause[1])], self.logical_state.db_get_all_goals())
 
 #    def test_entailment_with_proof1(self):
 #        """

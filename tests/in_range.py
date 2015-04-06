@@ -35,7 +35,8 @@ class InRangeTest(ETBTest):
     def valid_claim(self):
         q = self.etb.etb().query('in_range(1,4,2)')
         self.etb.etb().query_wait(q)
-        return (self.etb.query_answers(q), [mk_subst()])
+        answers = self.etb.query_answers(q)
+        return (answers, [mk_subst()])
     
     @etb_test
     def invalid_claim(self):

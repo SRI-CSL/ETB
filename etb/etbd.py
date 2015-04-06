@@ -95,8 +95,11 @@ def main():
 
     ETB(etbconf)
     # The main thread continues here - is this the best way to do it?
-    while True:
-        time.sleep(5)
+    try:
+        while True:
+            time.sleep(5)
+    except Exception as e:
+        print('Caught exception {0}'.format(e))
 
 if __name__ == '__main__':
     main()

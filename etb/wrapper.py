@@ -411,6 +411,7 @@ class Success(Result):
         Result.__init__(self, tool)
 
     def get_claims(self, goal):
+        # This should not be called
         return [terms.InterpretedClaim(goal, reason=goal)]
 
     def get_pending_rules(self, goal):
@@ -504,6 +505,7 @@ class Substitutions(Result):
         return 'Substitutions({0})'.format(self.substitutions)
  
     def get_claims(self, goal):
+        # This should not be called
         claims = []
         for s in self.substitutions:
             fact = s(goal)
@@ -579,6 +581,7 @@ class Lemmata(Substitutions):
         self.lemmatas = lemmata_list
         
     def get_claims(self, goal):
+        # This should not be called
         return []
  
     def get_pending_rules(self, goal):

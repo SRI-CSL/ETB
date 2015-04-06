@@ -9,6 +9,7 @@ from .. import model
 from .. import index
 from .. import inference
 from .. import engine
+from .. import graph
 import unittest
 import os
 
@@ -27,7 +28,9 @@ class TestEngine(unittest.TestCase):
     def setUp(self):
         # The etb argument does not do anything in these tests (we are testing
         # the datalog engine)
-        h = NullHandler()
+        #h = NullHandler()
+        h = logging.StreamHandler()
+        h.setLevel(logging.INFO)
         logging.getLogger("etb").addHandler(h)
 
         self.interpret_state = engine.InterpretStateLessThan()
@@ -78,9 +81,13 @@ class TestEngine(unittest.TestCase):
         self.engine.clear()
         # note that the second argument of Claim is a reason (which could be a
         # Clause, here it is just some structured object)
-        claim = terms.Claim(self.pab, model.create_external_explanation())
-        returned_claim = terms.Claim(self.pab, self.engine.get_rule_and_facts_explanation(claim))
-        self.engine.add_claim(claim)
+        expl = model.create_external_explanation()
+        claim = terms.Claim(self.pab, expl)
+        returned_claim = terms.Claim(self.pab, self.engine.get_rule_and_facts_explanation(claim, expl))
+        prule = self.engine.add_pending_rule(terms.Clause(self.pab, []), self.pab)
+        self.engine.add_goal(self.pab)
+
+        #self.engine.add_claim(claim)
         self.assertItemsEqual([returned_claim], self.engine.get_claims())
 
     # def test_add_goal(self):
@@ -131,7 +138,7 @@ class TestEngine(unittest.TestCase):
     def test_add_pending_rule_that_is_a_claim(self):
         self.engine.clear()
         pending_rule = terms.Clause(self.qab, [])
-        self.engine.add_pending_rule(pending_rule)
+        self.engine.add_pending_rule(pending_rule, external_goal=self.qab)
         self.assertItemsEqual([self.qab], map(lambda claim: claim.literal, self.engine.get_claims()))
 
 
@@ -162,7 +169,9 @@ class TestEngine(unittest.TestCase):
         self.engine.add_rule(rule3, None)
         self.engine.add_rule(rule4, None)
         self.engine.add_goal(self.pathXY)
-        self.assertItemsEqual([self.pathab, self.pathac, self.pathbc, self.edgeab, self.edgebc], map(lambda claim:claim.literal, self.engine.get_claims()))
+        print('get_claims: {0}'.format(self.engine.get_claims()))
+        claims = map(lambda claim:claim.literal, self.engine.get_claims())
+        self.assertItemsEqual([self.pathab, self.pathac, self.pathbc, self.edgeab, self.edgebc], claims)
 
     def test_is_renaming(self):
         self.engine.clear()
@@ -220,7 +229,7 @@ class TestEngine(unittest.TestCase):
     #     self.engine.clear()
     #     X = terms.mk_var("X")
     #     Y = terms.mk_var("Y")
-    #     self.engine.load_rules('../etb/datalog/test/logic_programs/program3.lp')
+    #     self.engine.load_rules('./etb/datalog/test/logic_programs/program3.lp')
     #     q1 = parser.parse_literal('q1(X, Y)')
     #     q1_13 = parser.parse_literal('q1(1, 3)')
     #     q1_53 = parser.parse_literal('q1(5, 3)')
@@ -238,15 +247,15 @@ class TestEngine(unittest.TestCase):
     def test_unification_of_goal_bug(self):
         self.engine.clear()
         self.engine.load_rules('./etb/datalog/test/logic_programs/program3.lp')
-        X = terms.mk_var("X")
         pX2 = parser.parse_literal('p(X, 2)')
         self.engine.add_goal(pX2)
         self.assertTrue(self.engine.is_entailed(pX2))
+        
 
     # def test_query_ocaml1(self):
     #     self.engine.clear()
     #     X = terms.mk_var("X")
-    #     self.engine.load_rules('../etb/datalog/test/logic_programs/graph10.lp')
+    #     self.engine.load_rules('./etb/datalog/test/logic_programs/graph10.lp')
     #     goal = parser.parse_literal('increasing(3, X)')
     #     inc1 = parser.parse_literal('increasing(3,4)')
     #     inc2 = parser.parse_literal('increasing(3,5)')
@@ -273,7 +282,7 @@ class TestEngine(unittest.TestCase):
         # now check that this indeed still kept the goal stuck
         self.assertItemsEqual([self.gt_4_2], self.engine.get_stuck_goals())
         # force the engine to check its stuck goals
-        self.engine.check_stuck_goals()
+        self.engine.check_stuck_goals(["gt"])
         # and check that goal is indeed no longer stuck (cause there is a rule
         # that matches)
         stuck_goals = self.engine.get_stuck_goals()
@@ -447,29 +456,33 @@ class TestEngine(unittest.TestCase):
 
         goal_thread.join()
 
-    def test_reset(self):
-        self.engine.clear()
-        p1 = parser.parse_literal('p(1)')
-        p2 = parser.parse_literal('p(2)')
-        claim1 = terms.Claim(p1, model.create_external_explanation())
-        claim2 = terms.Claim(p2, model.create_external_explanation())
+    # def test_reset(self):
+    #     self.engine.clear()
+    #     p1 = parser.parse_literal('p(1)')
+    #     p2 = parser.parse_literal('p(2)')
+    #     goal1 = parser.parse_literal('p(1)')
+    #     goal2 = parser.parse_literal('p(X)')
+    #     clause1 = terms.Clause(p1, [])
+    #     clause2 = terms.Clause(p2, [])
+    #     prule1 = self.engine.add_pending_rule(clause1, goal1)
+    #     prule2 = self.engine.add_pending_rule(clause2, goal2)
+        
+    #     claim1 = terms.Claim(p1, model.create_external_explanation())
+    #     claim2 = terms.Claim(p2, model.create_external_explanation())
 
-        goal1 = parser.parse_literal('p(1)')
-        X = terms.mk_var("X")
-        goal2 = parser.parse_literal('p(X)')
+    #     self.engine.add_claim(prule1, model.create_external_explanation())
+    #     self.engine.add_claim(prule2, model.create_external_explanation())
 
-        self.engine.add_claim(claim1)
-        self.engine.add_claim(claim2)
-
-        self.engine.add_goal(goal1)
-        self.assertItemsEqual([p1], map(lambda claim: claim.literal, self.engine.get_claims_matching_goal(goal1)))
-
-
-        self.engine.reset()
-        self.engine.add_claim(claim1)
-        self.engine.add_claim(claim2)
-        self.engine.add_goal(goal2)
-        self.assertItemsEqual([p1, p2], map(lambda claim: claim.literal, self.engine.get_claims_matching_goal(goal2)))
+    #     self.engine.add_goal(goal1)
+    #     self.assertItemsEqual([p1], map(lambda claim: claim.literal, self.engine.get_claims_matching_goal(goal1)))
+    #     print('---Resetting---')
+    #     self.engine.reset()
+    #     self.engine.add_claim(prule1, model.create_external_explanation())
+    #     self.engine.add_claim(prule2, model.create_external_explanation())
+    #     self.engine.add_goal(goal2)
+    #     matches = map(lambda claim: claim.literal, self.engine.get_claims_matching_goal(goal2))
+    #     print('matches = {0}'.format(matches))
+    #     self.assertItemsEqual([p1, p2], matches)
  
     def test_offset(self):
         # rules containing only constants do not seem to work properly (because
@@ -490,16 +503,17 @@ class TestEngine(unittest.TestCase):
         pong1 = parser.parse_literal('pong(1)')
         ping0 = parser.parse_literal('ping(0)')
 
-        rule = terms.Clause(pong1, [ping0])
+        clause = terms.Clause(pong1, [ping0])
+        prule = self.engine.add_pending_rule(clause, ping0)
         self.engine.add_goal(pong1)
-        self.engine.add_claim(terms.Claim(ping0, model.create_external_explanation()))
+        #self.engine.add_claim(terms.Claim(ping0, model.create_external_explanation()))
 
 
         # We'll add the pending rule pong(1) :- ping(0) but slow it down; if
         # locking is not properly done in Engine.add_pending_rule (remove the
         # current locks for example); the below close/completion code will
         # interfere.
-        goal_thread = threading.Thread(target = self.engine.add_pending_rule, args=(rule,pong1))
+        goal_thread = threading.Thread(target = self.engine.add_pending_rule, args=(clause,pong1))
         # self.engine.go_slow(1)
         goal_thread.start()
 
@@ -519,19 +533,21 @@ class TestEngine(unittest.TestCase):
         pong1 = parser.parse_literal('pong(1)')
         gt = parser.parse_literal('gt(0, 2)')
 
-        rule = terms.Clause(pong1, [gt])
+        clause = terms.Clause(pong1, [gt])
+        prule = self.engine.add_pending_rule(clause, pong1)
         self.engine.add_goal(pong1)
 
-        goal_thread = threading.Thread(target = self.engine.add_pending_rule, args=(rule,pong1))
+        goal_thread = threading.Thread(target = self.engine.add_pending_rule, args=(clause,pong1))
         self.engine.go_slow(0.2)
         goal_thread.start()
-
        
         # sleep a bit to ensure that we at least have properly started the
         # add_pending_rule (otherwise is_stuck_goal would be false; which is
         # fine but not the purpose of this test)
         time.sleep(0.1)
+        annot = self.engine.get_goal_annotation(gt)
         self.engine.close()
+        print('annot.status = {0}'.format(annot.print_status()))
         self.engine.complete()
         result = self.engine.is_stuck_goal(gt)
         self.assertTrue(result)

@@ -493,10 +493,12 @@ class Networking(SocketServer.ThreadingMixIn,
                     node.load = int(payload['load'])
                 if 'predicates' in payload:
                     if node.predicates != payload['predicates']:
+                        # Find new ones
+                        newpreds = set(payload['predicates']) - node.predicates
                         node.predicates.clear()
                         node.predicates = payload['predicates']
-                        self.log.debug('Adding new predicates')
-                        self.etb.update_predicates()
+                        self.log.debug('Adding changes to predicates')
+                        self.etb.update_predicates(newpreds)
                 if 'subscriptions' in payload:
                     node.subscriptions.clear()
                     node.subscriptions.update(payload['subscriptions'])
@@ -660,6 +662,7 @@ class Networking(SocketServer.ThreadingMixIn,
                 if from_id in self._neighbors:
                     proxy = self.neighbor(from_id).proxy
                 else:
+                    print('setting proxy to None')
                     proxy = None
                 if proxy is not None:
                     self.log.debug('Sending query answer to %s', from_id)
@@ -810,15 +813,21 @@ class Networking(SocketServer.ThreadingMixIn,
     @_export
     def query_wait(self, qid):
         """Block until a query is complete."""
+        global interrupt_query_wait
+        try:
+            interrupt_query_wait
+        except NameError:
+            interrupt_query_wait = []
         goals = self.etb.get_query(qid)
-        self.log.debug("query_wait called for: {0} {1} goal: {2}"
-                       .format(qid, len(goals), goals))
         if not goals:
             self.log.error('Query id {0} not known'.format(qid))
             return True
         for goal in goals: #stjin: this is only 1 goal always I think, but it's a list..
             number = 0
-            while number < 2 and not self.etb.engine.is_completed(goal):
+            while ((not self.etb.engine.is_completed(goal)) and
+                   (not qid in interrupt_query_wait)):
+                if qid in interrupt_query_wait:
+                    return False
                 self.etb.engine.close()
                 if False: #number > 100:
                     filename = self.etb.engine.goal_deps_to_png(goal)
@@ -830,6 +839,15 @@ class Networking(SocketServer.ThreadingMixIn,
                 time.sleep(1)
         return True
 
+    @_export
+    def query_wait_interrupt(self, qid):
+        global interrupt_query_wait
+        try:
+            interrupt_query_wait
+        except NameError:
+            interrupt_query_wait = []
+        interrupt_query_wait.append(qid)
+        return True
 
     @_export
     def query_derivation(self, qid, filename):

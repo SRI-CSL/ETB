@@ -8,7 +8,7 @@ class Utils(Tool):
     """Library of util functions, without tool invocation"""
 
     @Tool.sync
-    @Tool.predicate("+low: value, +up: value, -result: value")
+    @Tool.predicate("+low: value, +up: value, result: value")
     def in_range(self, low, up, result):
         """Result in [low, up] range."""
         low = int(low.val)
@@ -24,7 +24,7 @@ class Utils(Tool):
                 return Success(self)
             else:
                 return Failure(self)
-    @Tool.predicate("+low: value, +up: value, -result: value")
+    @Tool.predicate("+low: value, +up: value, result: value")
     def in_range_async(self, low, up, result):
         """Result in [low, up] range."""
         low = int(low.val)

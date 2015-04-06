@@ -379,6 +379,14 @@ def mk_clause(head, body):
     """
     return [head] + body
 
+def is_internal_literal(obj):
+    return (isinstance(obj, (list, tuple)) and
+            all(isinstance(x, int) for x in obj))
+
+def is_internal_clause(obj):
+    return (isinstance(obj, (list, tuple)) and
+            all(is_internal_literal(x) for x in obj))
+
 def is_fact(clause):
     """
     Check whether a `clause` is a fact (empty body): a `clause` is a fact if
@@ -675,7 +683,7 @@ def remove_first_body_literal(clause,subst, term_factory):
         new_clause[i] = apply_substitution_l(subst,new_clause[i], term_factory)
     return new_clause
 
-def create_resolution_bottom_up_explanation(from_clause, from_claim):
+def create_resolution_bottom_up_explanation(from_clause, from_claim, claim_expl):
     """
     Create a tuple that represents a resolution using `from_clause` and a claim
     `from_claim`. We use the resulting structures as explanations for
@@ -692,7 +700,16 @@ def create_resolution_bottom_up_explanation(from_clause, from_claim):
         Use that to detect the type of explanation.
 
     """
-    return ("ResolutionBottomUp", from_clause, from_claim)
+    assert isinstance(from_clause, graph.PendingRule), 'from_clause {0}: {1}'.format(from_clause, type(from_clause))
+    assert is_internal_clause(from_claim), 'from_claim {0}: {1}'.format(from_claim, type(from_claim))
+    assert isinstance(claim_expl, tuple), 'bad claim_expl: {0}'.format(claim_expl)
+    assert isinstance(claim_expl[0], basestring), 'bad claim_expl: {0}'.format(claim_expl)
+    assert claim_expl[0] != "None", 'bad claim_expl: {0}'.format(claim_expl)
+                                                                                                     
+    # engine.get_rule_and_facts_explanation calls generate_children recursively on
+    # from_clause and from_claim to get their explanations, which uses db_get_explanation,
+    # which only returns meaningful explanations for PendingRules and goals.
+    return ("ResolutionBottomUp", from_clause, from_claim, claim_expl)
 
 def create_resolution_top_down_explanation(from_clause, from_goal):
     """
@@ -709,6 +726,8 @@ def create_resolution_top_down_explanation(from_clause, from_goal):
         a triple where the first element is the string `ResolutionTopDown`.
         Use that to detect the type of explanation.
     """
+    assert is_internal_clause(from_clause) or from_clause is None, 'from_clause {0}'.format(from_clause)
+    assert is_internal_literal(from_goal), 'from_goal {0}'.format(from_goal)
     return ("ResolutionTopDown", from_clause, from_goal)
 
 
@@ -720,22 +739,20 @@ def create_axiom_explanation():
     instance of a tuple with 1 element.
 
     :returntype:
-        a triple where the first element is the string `Axiom`.
+        a tuple where the first element is the string `Axiom`.
         Use that to detect the type of explanation.
     """
-    return ("Axiom", None)
+    return ("Axiom",)
 
 def create_external_explanation():
     """
-    Create a tuple that represents an external explanation.
-    We add a dummy argument `None` as Python refuses to recognize ("External") as an
-    instance of a tuple with 1 element.
+    Create a 1-element tuple that represents an external explanation.
 
     :returntype:
-        a triple where the first element is the string `External`.
+        a tuple where the first element is the string `External`.
         Use that to detect the type of explanation.
     """
-    return ("External", None)
+    return ("External",)
 
 
 def is_top_down_explanation(internal_explanation):
@@ -1019,7 +1036,7 @@ class LogicalState(object):
             self.db_claims.clear()
 
 
-    def db_mem(self,clause):
+    def db_mem(self,rule):
         """
         Check whether the `clause` is already present in `db_all`.
 
@@ -1029,20 +1046,21 @@ class LogicalState(object):
         :returntype:
             `True` or `False`
         """
-        c = freeze_clause(clause)
+        c = rule.clause if isinstance(rule, graph.PendingRule) else freeze_clause(rule)
         return c in self.db_all
 
-    def db_mem_claim(self, claim):
+    def db_mem_claim(self, prule):
         """
-        Check whether the `claim` is already present in `db_claims`.
+        Check whether the `graph.PendingRule` is already present in `db_claims`.
 
         :parameters:
-            `claim`: an internal claim, i.e., a list of 1 list of integers
+            `prule`: a `graph.PendingRule` instance
 
         :returntype:
-            `None`
+            `bool`
         """
-        return index.in_index(self.db_claims, claim[0], claim )
+        assert(isinstance(prule, graph.PendingRule))
+        return index.in_index(self.db_claims, prule.clause[0], prule)
 
     def db_add_clause(self, prule, explanation):
         """
@@ -1073,15 +1091,19 @@ class LogicalState(object):
             else:
                 self.db_all[key] = ()
 
-    def db_add_claim(self,claim):
+    def db_add_claim(self,prule):
         """
-        Add a `claim` to the `db_claims` index.
+        Add a `prule` to the `db_claims` index.
 
         :parameters:
-            - `claim`: a list of 1 list of integers
+            - `prule`: a list of 1 list of integers or a graph.PendingRule
         """
         with self:
-            index.add_to_index(self.db_claims, claim[0], claim)
+            assert(isinstance(prule, graph.PendingRule))
+            claim = freeze_clause(prule.clause if isinstance(prule, graph.PendingRule) else prule)
+            if not index.in_index(self.db_claims, claim[0], prule):
+                index.add_to_index(self.db_claims, claim[0], prule)
+                assert(self.db_mem_claim(prule))
 
     def db_add_goal(self, goal):
         """
@@ -1140,7 +1162,7 @@ class LogicalState(object):
         """
         self.goal_dependencies.add_pending_rule_to_pending_rule(rule1, rule2)
 
-    def db_add_claim_to_goal(self, goal, claim):
+    def db_add_claim_to_goal(self, goal, claim, explanation):
         """
         Add a `claim` directly to the `goal` in the `goal_dependencies`.
 
@@ -1150,7 +1172,7 @@ class LogicalState(object):
         :returntype:
             `None`
         """
-        self.goal_dependencies.add_claim(goal, claim)
+        self.goal_dependencies.add_claim(goal, claim, explanation)
 
     def db_get_goal_dependencies(self):
         """
@@ -1416,7 +1438,7 @@ class LogicalState(object):
             else:
                 return children
 
-        g = freeze(goal)
+        g = goal.clause if isinstance(goal, graph.PendingRule) else freeze(goal)
         children = self.goal_dependencies.get_children(g)
         bigger_children = keep_only_bigger_children(children, g)
         if bigger_children:
@@ -1435,18 +1457,20 @@ class LogicalState(object):
             return True
 
 
-    def db_add_clause_head(self, clause):
+    def db_add_clause_head(self, rule):
         """
         Add a `clause` to the `db_heads` index. We can use this to store the KB
         rules: they will be matched against goals using the heads of rules, so
         it makes to speed that matching by using an index.
 
         :parameters:
-            - `clause`: a list of list of integers representing a rule
+            - `rule`: a list of list of integers representing a rule, or a
+              `graph.PendingRule`
         """
-        assert(isinstance(clause, list))
+        assert(isinstance(rule, (list, graph.PendingRule)))
+        clause = rule.clause if isinstance(rule, graph.PendingRule) else rule
         with self:
-            index.add_to_index(self.db_heads, clause[0],clause)
+            index.add_to_index(self.db_heads, clause[0], clause)
 
     def db_add_clause_selected(self,selected_literal, clause):
         """
@@ -1583,8 +1607,9 @@ class LogicalState(object):
             `(ResolutionTopDown, clause', goal)`  or `(External, 0)` or a
             :class:`etb.terms.Term`
         """
-        c = freeze_clause(clause)
+        c = freeze_clause(clause) if isinstance(clause, list) else clause
         if c in self.db_all:
             return self.db_all[c]
         else:
-            return ("None", None)
+            self.log.info('db_get_explanation has no explanation for {0}'.format(clause))
+            return ("None",)

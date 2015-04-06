@@ -134,7 +134,7 @@ class Engine(object):
         self.CLOSE_DURING_INFERENCING = False
 
         
-    def add_claim(self, claim, quiet=False):
+    def add_claim(self, prule, explanation, quiet=False):
         """
         Adds a claim to the engine by transforming the claim to its internal
         representation (using :func:`etb.datalog.model.TermFactory.mk_literal`)
@@ -162,16 +162,13 @@ class Engine(object):
 
 
         """
-        assert isinstance(claim, terms.Claim), 'claim is not a terms.Claim in add_claim'
-        self.log.debug("Engine is adding claim %s", claim)
-
-        # Transform to Internal format
-        assert isinstance(claim.literal, terms.Literal), 'Should be Literal'
-        internal_claim = self.term_factory.mk_literal(claim.literal)
-
+        assert isinstance(prule, graph.PendingRule), 'prule is not a graph.PendingRule in add_claim'
+        self.log.debug("Engine is adding prule {0} with explanation {1}"
+                       .format(prule.clause, explanation))
+ 
         # Ask Inference State to add this internal claim
         self.inference_state.lock()
-        self.inference_state.add_claim([internal_claim], claim.reason, quiet=quiet)
+        self.inference_state.add_claim(prule, explanation, quiet=quiet)
         self.inference_state.unlock()
 
     def add_claims(self, claims):
@@ -196,7 +193,7 @@ class Engine(object):
 
         for claim in claims:
             internal_c = self.term_factory.mk_literal(claim.literal)
-            internal_claims.append(([internal_c], claim.reason))
+            internal_claims.append((internal_c, claim.reason))
         self.inference_state.lock()
         self.inference_state.add_claims(internal_claims)
         self.inference_state.unlock()
@@ -256,6 +253,7 @@ class Engine(object):
             """
             annotation = graph.Annotation(frozen_goal, annot['kind'], state)
             annotation.claims = [[self.term_factory.mk_literal(claims[i].literal)] for i in annot['claims']]
+            # annotation.explanations = [[self.term_factory.mk_literal(claims[i].literal)] for i in annot['claims']]
             annotation.status = annot['status']
             self.inference_state.logical_state.goal_dependencies.add_annotation(frozen_goal, annotation)
         for goal, annot in zip(goals, annotations):
@@ -351,7 +349,8 @@ class Engine(object):
 
 
 
-    def add_pending_rule(self, rule, external_goal=None, internal_goal=None):
+    def add_pending_rule(self, rule, external_goal=None, internal_goal=None,
+                         explanation=None):
         """
         We add a pending `rule` to the Engine based on a given `external_goal`. The
         intent of pending rule is that they are used by the Inference engine as
@@ -374,6 +373,7 @@ class Engine(object):
 
         """
         assert isinstance(rule, terms.Clause), 'rule is not a terms.Clause in add_pending_rule'
+        assert isinstance(external_goal, (terms.Literal, type(None)))
 
         # otherwise it is a real rule:
         internal_rule = self.term_factory.mk_clause(rule)
@@ -387,16 +387,18 @@ class Engine(object):
             return
 
         # Note that there is no from_clause here
-        explanation = model.create_resolution_top_down_explanation(None, internal_goal)
+        if explanation is None:
+            explanation = model.create_resolution_top_down_explanation(None, internal_goal)
         self.log.debug('engine.add_pending_rule: explanation: {0}, goal: {1}'.format(explanation, external_goal))
         self.inference_state.lock()
-        self.inference_state.add_pending_rule(internal_rule, explanation, internal_goal)
+        prule = self.inference_state.add_pending_rule(internal_rule, explanation, internal_goal)
         self.inference_state.unlock()
         # only interpretstate will call pending rulef for goals (which means
         # that goal becomes automatically unstuck)
         #self.inference_state.lock()
         #self.inference_state.logical_state.db_move_stuck_goal_to_goal(internal_goal)
         #self.inference_state.unlock()
+        return prule
 
 
     def add_rule(self, rule, explanation):
@@ -545,7 +547,7 @@ class Engine(object):
                 self.log.exception('unable to load logic state file {0}:\n {1}'
                                    .format(filename, err))
 
-    def check_stuck_goals(self):
+    def check_stuck_goals(self, newpreds):
         """
         Force the engine to recheck its stuck goals (a stuck goal is a goal
         that the :class:`etb.datalog.inference.Inference` send off to an
@@ -569,7 +571,7 @@ class Engine(object):
 
         """
         self.inference_state.lock()
-        self.inference_state.check_stuck_goals()
+        self.inference_state.check_stuck_goals(newpreds)
         self.inference_state.unlock()
 
     def close(self):
@@ -620,7 +622,7 @@ class Engine(object):
         internal_goal = self.term_factory.mk_literal(goal)
         return self.inference_state.is_completed(internal_goal)
 
-    def get_claims(self):
+    def get_claims(self, explanations=False):
         """
         Get all claims the engine currently knows about. Uses
         :func:`etb.datalog.inference.Inference.get_claims` to get the internal
@@ -633,14 +635,25 @@ class Engine(object):
 
         """
         internal_claims = self.inference_state.get_claims()
-        def create_external_claim(internal_claim):
-            external_literal = self.term_factory.close_literal(internal_claim[0])
-            tmp_claim = terms.Claim(external_literal, None)
-            expl = self.get_rule_and_facts_explanation(tmp_claim)
-            external_claim = terms.Claim(external_literal, expl)
-            return external_claim
-
-        return map(lambda claim: create_external_claim(claim), internal_claims)
+        if explanations:
+            def create_external_claim(internal_claim):
+                external_literal = self.term_factory.close_literal(internal_claim.clause[0])
+                intexpl = self.inference_state.logical_state.db_get_explanation(internal_claim)
+                expl = self.term_factory.close_explanation(intexpl)
+                external_claim = terms.Claim(external_literal, expl)
+                return external_claim
+            external_claims = map(lambda claim: create_external_claim(claim), internal_claims)
+        else:
+            internal_lits = {iclaim.clause[0] for iclaim in internal_claims}
+            def create_external_claim(internal_claim):
+                external_literal = self.term_factory.close_literal(internal_claim.clause[0])
+                #intexpl = self.inference_state.logical_state.db_get_explanation(internal_claim)
+                expl = self.get_rule_and_facts_explanation(internal_claim)
+                external_claim = terms.Claim(external_literal, expl)
+                self.log.info('engine.get_claims: expl = {0}'.format(expl))
+                return external_claim
+            external_claims = [create_external_claim(claim) for claim in internal_claims]
+        return external_claims
 
     def get_goal_results(self):
         """
@@ -655,8 +668,10 @@ class Engine(object):
         if rename_goal:
             fgoal = model.freeze(rename_goal)
         else:
-            fgoal = model.freeze(goal)
+            fgoal = model.freeze(internal_goal)
         annot = self.inference_state.logical_state.goal_dependencies.get_annotation(fgoal)
+        if not annot:
+            print('No annotation for {0} goal {1}'.format("rename" if rename_goal else "", fgoal))
         return annot
 
     def get_goal_annotations(self, goal_results):
@@ -787,14 +802,17 @@ class Engine(object):
         """
         assert isinstance(goal, terms.Literal), 'goal is not a Literal in get_claims_matching_goal'
         internal_goal = self.term_factory.mk_literal(goal)
-        internal_claims = self.inference_state.get_claims_matching_goal(internal_goal)
-        def create_external_claim(internal_claim):
+        internal_claims, explanations = self.inference_state.get_claims_matching_goal(internal_goal)
+        assert(len(internal_claims) == len(explanations))
+        self.log.info('engine.get_claims_matching_goal: internal_claims {0}'
+                      .format(internal_claims))
+        def create_external_claim(internal_claim, explanation):
             external_literal = self.term_factory.close_literal(internal_claim[0])
-            tmp_claim = terms.Claim(external_literal, None)
-            external_claim = terms.Claim(external_literal, self.get_rule_and_facts_explanation(tmp_claim))
+            external_claim = terms.Claim(external_literal, self.get_rule_and_facts_explanation(internal_claim, explanation))
             return external_claim
 
-        return map(lambda claim: create_external_claim(claim), internal_claims)
+        return map(lambda (claim, expl): create_external_claim(claim, expl),
+                   zip(internal_claims, explanations))
 
     def get_substitutions(self, goal):
         """
@@ -836,17 +854,16 @@ class Engine(object):
         """
         return self.get_claims_matching_goal(goal)
 
-    # def is_entailed(self, goal):
-    #     """
-    #     .. warning::
-    #         **DEPRECATED**: There is no requirement on the current engine to
-    #         support this function.
-
-    #     Check whether the engine currently thinks this goal holds.
-    #     """
-    #     assert isinstance(goal, terms.Literal), 'goal is not a Literal in is_entailed'
-    #     internal_goal = self.term_factory.mk_literal(goal)
-    #     return self.inference_state.is_entailed(internal_goal)
+    def is_entailed(self, goal):
+        """
+        .. warning::
+            Used only for unit tests
+        
+        Check whether the engine currently thinks this goal holds.
+        """
+        assert isinstance(goal, terms.Literal), 'goal is not a Literal in is_entailed'
+        internal_goal = self.term_factory.mk_literal(goal)
+        return self.inference_state.is_entailed(internal_goal)
 
     def clear(self):
         """
@@ -873,35 +890,61 @@ class Engine(object):
             return str(list_of_terms[0]) +  " :- " + ",".join(map(lambda literal: str(literal), list_of_terms[1:]))
 
 
-    def get_rule_and_facts_explanation(self, claim):
-        internal_fact = self.term_factory.mk_literal(claim.literal)
+    def get_rule_and_facts_explanation(self, claim, explanation=None):
+        assert (isinstance(claim, (graph.PendingRule, terms.Claim)) or
+                model.is_internal_clause(claim)), 'claim {0}: {1}'.format(claim, type(claim))
+        self.log.debug('get_rule_and_facts_explanation: claim {0}, explanation {1}'
+                       .format(claim, explanation))
+        #internal_fact = self.term_factory.mk_literal(claim.clause[0])
 
         # the facts and 1 rule to collect
         facts = []
         rule = [None]
 
-        def generate_children(cl):
-            explanation = self.inference_state.logical_state.db_get_explanation(cl)
+        def generate_children(cl, explanation=None):
+            assert (isinstance(cl, (graph.PendingRule, terms.Claim)) or
+                    model.is_internal_clause(cl)), 'cl = {0}: {1}'.format(cl, type(cl))
+            if explanation is None:
+                explanation = self.inference_state.logical_state.db_get_explanation(cl)
+                assert explanation[0] != "None", 'Could not get explanation for {0}'.format(cl)
+            else:
+                assert explanation[0] != "None"
             external_explanation = self.term_factory.close_explanation(explanation)
-            if isinstance(explanation, tuple) and len(explanation) == 2: # an Axiom or External or None
+            if isinstance(explanation, tuple) and len(explanation) == 1: # an Axiom or External or None
                 self.log.debug("get_rule_and_facts_explanation: claim %s has explanation %s and is External or Axiom or None" % (claim, external_explanation))
-                facts.append(self.term_factory.close_literal(cl[0]))
+                lit = cl[0] if isinstance(cl, (list, tuple)) else (
+                    cl.clause[0] if isinstance(cl, graph.PendingRule) else cl.literal)
+                if isinstance(lit, terms.Literal):
+                    lit = self.term_factory.mk_literal(lit)
+                assert model.is_internal_literal(lit), 'lit {0} is not internal literal'.format(lit)
+                facts.append(self.term_factory.close_literal(lit))
 
             elif isinstance(explanation, tuple) and len(explanation) == 3 and explanation[0] == "ResolutionTopDown":
                 self.log.debug("get_rule_and_facts_explanation: claim %s has explanation %s and is ResolutionTopDown" % (claim, external_explanation))
-                rule[0] = self.__readable_clause(self.term_factory.close_literals(cl))
+                lits = cl.clause if isinstance(cl, graph.PendingRule) else cl
+                if len(lits) == 1:
+                    facts.append(self.term_factory.close_literal(lits[0]))
+                else:
+                    rule[0] = self.__readable_clause(self.term_factory.close_literals(lits))
 
-            elif isinstance(explanation, tuple) and len(explanation) == 3 and explanation[0] == "ResolutionBottomUp":
+            elif isinstance(explanation, tuple) and len(explanation) == 4 and explanation[0] == "ResolutionBottomUp":
+                # ("ResolutionBottomUp", pending_rule, clause, clause_expl)
                 self.log.debug("get_rule_and_facts_explanation: claim %s has explanation %s and is ResolutionBottomUp" % (claim, external_explanation))
+                rule_expl = self.inference_state.logical_state.db_get_explanation(explanation[1])
+                assert rule_expl[0] != "None"
+                assert explanation[3] != "None"
                 generate_children(explanation[1])
-                generate_children(explanation[2])
+                generate_children(explanation[2], explanation[3])
 
             elif isinstance(explanation, (terms.Literal, unicode)):
                 self.log.debug("get_rule_and_facts_explanation: claim %s has explanation %s and is TERM" % (claim, external_explanation))
                 facts.append(external_explanation)
+            else:
+                self.log.debug("get_rule_and_facts_explanation: claim %s has explanation %s and is UNKNOWN" % (claim, external_explanation))
 
-        generate_children([internal_fact])
-
+        generate_children(claim, explanation)
+        self.log.debug('engine.get_rule_and_facts_explanation: rule[0] = {0}, facts = {1}'
+                      .format(rule[0], facts))
         if rule[0] is not None:
             return "from rule " + rule[0] + " with facts: " + ", ".join(map(lambda literal: str(literal), facts))
         elif len(facts) == 1:
@@ -909,7 +952,7 @@ class Engine(object):
         else:
             return ", ".join(map(lambda literal: str(literal), facts))
 
-    def to_png(self, claim):
+    def to_png(self, claim, explanation=None):
         """
         Create a PNG image of a graph that explains how the engine deduced the
         `claim`.
@@ -925,13 +968,17 @@ class Engine(object):
         created PNG file.
 
         """
-        internal_fact = self.term_factory.mk_literal(claim.literal)
+        #internal_fact = self.term_factory.mk_literal(claim.literal)
 
         graph = pydot.Dot(graph_type='graph')
 
         def generate_children(cl):
             #print("generate_children(%s)" % repr(cl))
-            explanation = self.inference_state.logical_state.db_get_explanation(cl)
+            if explanation is None:
+                explanation = self.inference_state.logical_state.db_get_explanation(cl)
+                assert explanation[0] != "None", 'Could not get explanation for {0}'.format(cl)
+            else:
+                assert explanation[0] != "None"
             #print("explanation = %s" % repr(explanation))
             external_explanation = self.term_factory.close_explanation(explanation)
             #print("external_explanation = %s" % external_explanation)
@@ -939,10 +986,10 @@ class Engine(object):
             top_node = pydot.Node(str(cl),label=label_top_node)
             graph.add_node(top_node)
             #the isinstance stuff is a hack to prevent crashing
-            if  isinstance(explanation, tuple) and len(explanation) == 2: # an Axiom or External or None
+            if  isinstance(explanation, tuple) and len(explanation) == 1: # an Axiom or External
                 axiom_node = pydot.Node(str(uuid.uuid4()), label=external_explanation)
                 graph.add_node(axiom_node)
-                edge = pydot.Edge(top_node, axiom_node )
+                edge = pydot.Edge(top_node, axiom_node)
                 graph.add_edge(edge)
             elif isinstance(explanation, tuple) and len(explanation) == 3 and explanation[0] == "ResolutionTopDown":
                 # Note that we do not recurse through the goal node
@@ -964,17 +1011,17 @@ class Engine(object):
                 if explanation[1] is not None:
                     generate_children(explanation[1])
 
-            elif isinstance(explanation, tuple) and len(explanation) == 3 and explanation[0] == "ResolutionBottomUp": # ResolutionBottomUp
+            elif isinstance(explanation, tuple) and len(explanation) == 4 and explanation[0] == "ResolutionBottomUp": # ResolutionBottomUp
                 node = pydot.Node(str(uuid.uuid4()), label=explanation[0])
                 graph.add_node(node)
-                edge1 = pydot.Edge(top_node, node )
+                edge1 = pydot.Edge(top_node, node)
                 edge2 = pydot.Edge(top_node, str(explanation[1]))
                 edge3 = pydot.Edge(top_node, str(explanation[2]))
                 graph.add_edge(edge1)
                 graph.add_edge(edge2)
                 graph.add_edge(edge3)
                 generate_children(explanation[1])
-                generate_children(explanation[2])
+                generate_children(explanation[2], explanation[3])
 
             elif isinstance(explanation, terms.Term):
                 node = pydot.Node(str(uuid.uuid4()), label="External")
@@ -996,7 +1043,7 @@ class Engine(object):
                 graph.add_edge(edge1)
                 graph.add_edge(edge2)
 
-        generate_children([internal_fact])
+        generate_children([internal_fact], explanation)
         filename = str(uuid.uuid4()) + ".png"
         graph.write_png(filename)
         return [filename]
@@ -1136,23 +1183,24 @@ class Engine(object):
             #pretty_print_gT = "\n\t\t(g.T: " + str(annotation_root.print_gT(self.term_factory))
             #pretty_print_gD = "\n\t\t(g.D: " + str(annotation_root.print_gD(self.term_factory)) + " )"
 
-            if any(isinstance(el, tuple) for el in root):
-                self.log.debug("png generation: %s", self.__readable_clause(self.term_factory.close_literals(root)))
-                root_node = pydot.Node(str(root),
-                        label=self.__readable_clause(self.term_factory.close_literals(root))
+            clroot = root.clause if isinstance(root, graph.PendingRule) else root
+            if any(isinstance(el, tuple) for el in clroot):
+                self.log.debug("png generation: %s", self.__readable_clause(self.term_factory.close_literals(clroot)))
+                root_node = pydot.Node(str(clroot),
+                        label=self.__readable_clause(self.term_factory.close_literals(clroot))
                         + pretty_print_subgoalindex +
                         pretty_print_goal +
                         pretty_print_index)
             else:
-                self.log.debug("png generation: %s", str(self.term_factory.close_literal(root)))
-                root_node = pydot.Node(str(root),
-                        label=str(self.term_factory.close_literal(root)) +
+                self.log.debug("png generation: %s", str(self.term_factory.close_literal(clroot)))
+                root_node = pydot.Node(str(clroot),
+                        label=str(self.term_factory.close_literal(clroot)) +
                         pretty_print_claims +
                         pretty_print_index +
                         #pretty_print_gT + pretty_print_gD +
                         pretty_print_status)
 
-            if self.inference_state.is_stuck_goal(list(root)):
+            if self.inference_state.is_stuck_goal(list(clroot)):
                  root_node.set("shape", 'box')
 
             pygraph.add_node(root_node)
@@ -1284,9 +1332,10 @@ class InterpretStateLessThan():
         args = external_goal.get_args()
         if external_goal.get_pred() == terms.IdConst("lt") and externals.less_than(args[0].val, args[1].val):
             # we add the ground goal to the claims of the engine
+            engine.inference_state.logical_state.db_move_stuck_goal_to_goal(internal_goal)
             claim = terms.Claim(external_goal, model.create_external_explanation())
-            engine.add_claim(claim)
-
+            engine.add_pending_rule(terms.InferenceRule(external_goal, [], temp=True),
+                                    external_goal, internal_goal)
 
     # Added for integration in etb
     def predicates(self):
