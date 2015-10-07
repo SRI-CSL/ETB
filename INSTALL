@@ -1,16 +1,35 @@
-This is the Evidential Tool Bus (ETB) v0.2.0dev1
-==========================================
+This is the Evidential Tool Bus (ETB)
+=====================================
 
-ETB requires Python 2.7.X (not 3.X) and Git, see instruction below to
+The easiest way to install ETB is with pip:
+
+  pip install EvidentialToolBus
+
+You may need to do this as root, or use virtualenv (google for it, very good
+for Python projects).  This will install the necessary dependencies.
+
+You can also install from Github: https://github.com/SRI-CSL/ETB
+
+In which case you can install from the directory that you cloned to:
+
+  pip install -e ETBDIR
+
+Again, do this as root or using virtualenv.
+
+-----
+
+ETB requires Python 2.7.X (not 3.X) and Git, see instructions below to
 check Python's version.
 
 In addition, some Python modules are required, see below for detailed
 installation instruction. The required modules are:
   - argparse
   - pyparsing
-
+  - six
+  - dirsync
   - pydot
   - graphviz
+  - colorama
 
   
 MacOSX and Linux:
@@ -31,32 +50,9 @@ version 2.7 should be available as:
 
   python2.7
 
-If that is the case, but is not the default version you can invoke the
-ETB tools with that version e.g.:
-
-  python2.7 etbd.py
-
-Invokes the ETB server using Python 2.7.
-
-You will probably need to set your PYTHONPATH to include the 
-source directory of the etb, i.e. etb/src.
-
-
 Git is installed in linux using the package manager or from source.
 For MacOSX, Git is available at:
 http://code.google.com/p/git-osx-installer/
-
-The ETB command line clients, client.py or etb-shell, require the
-readline and argparse modules, these may be obtained with (as root):
-
-  easy_install pydot readline argparse pyparsing==1.5.7
-
-Aside:
-
-easy_install on linux can be installed via:
-
-sudo apt-get install python-setuptools
-sudo apt-get install python-dev
   
 Windows:
 --------
@@ -101,24 +97,12 @@ easy_install pyreadline argparse pyparsing==1.5.7
 All Platforms:
 --------------
 
-In a shell, cd to the <ETB>/src directory, where <ETB> is the path to
-the ETB code. Type:
+Once installed, you should be able to run the ETB shell command:
 
-  ./etbd.py
+  etbsh
 
-The ETB daemon should start. If it complains that some module is
-missing, find the name of the missing module, e.g., modname, and do
-easy_install modname repeat until the ETB no longer complains, and is
-simply listening on port 26532.
-
-Start up a new shell (or a new msysgit window on Windows), cd to the
-<ETB>/etb_clients/etb-shell directory, and run:
-
-  ./etb-shell
-
-Again, if any modules are missing, easy_install them. If everthing is OK, you should
-get a simple '>' prompt; help should list the available ETB commands.
+This starts up an ETB node (etbd daemon) and a shell that allows you to
+interact with the node (send queries, etc.) type help for more information.
 
 At this point, the ETB core is now installed, the next step is to get
 some tool wrappers and configure your workflow.
-
