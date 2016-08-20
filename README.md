@@ -4,7 +4,6 @@
 Evidential Tool Bus (ETB)
 =========================
 
-The Evidential Tool Bus provides 
 
 See the file INSTALL for installation instruction, in particular
 external dependencies required to get ETB running.
@@ -33,8 +32,8 @@ The demos/ directory contains demos of ETB:
 
 *   blackwhite/ shows a demo of the pure Datalog with recursion but without any wrappers
 
-doc contains the documentation, including reference manuals
+The doc/ directory contains the documentation, including reference manuals
 
-src contains the source code (see the README there for more details)
+The src/ directory  contains the source code (see the README there for more details)
 
-tests contains test scripts
+The tests/ directory  contains test scripts
