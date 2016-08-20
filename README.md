@@ -11,27 +11,27 @@ external dependencies required to get ETB running.
 
 The demos/ directory contains demos of ETB: 
 
-⋅⋅*  allsat/ implements an ALLSAT solver using the ETB on top of the
+*  allsat/ implements an ALLSAT solver using the ETB on top of the
      yices SMT solver.
 
-⋅⋅*   allsat2/ implements an ALLSAT solver using the ETB on top of the
+*   allsat2/ implements an ALLSAT solver using the ETB on top of the
       yices2 SMT solver.
   
-⋅⋅*   make/ shows how to use the ETB to implement a distributed make
+*   make/ shows how to use the ETB to implement a distributed make
       tools that keeps track of all dependencies between source and
       objects files.
 
-⋅⋅*   k-induction/ shows two ways to implement a simple k-induction
+*   k-induction/ shows two ways to implement a simple k-induction
       procedure on top of the ETB. It shows how derivation rules can
       be used to establish a fact, and inference rules can be used
       to extract a proof of that fact.
 
-..*   hybridSal/ shows how to integrate separate tools in a 
+*   hybridSal/ shows how to integrate separate tools in a 
       complete workflow.
 
-⋅⋅*   vc/ shows a demo of a wrapper that dynamically creates lemmata (generated clauses)
+*   vc/ shows a demo of a wrapper that dynamically creates lemmata (generated clauses)
 
-⋅⋅*   blackwhite/ shows a demo of the pure Datalog with recursion but without any wrappers
+*   blackwhite/ shows a demo of the pure Datalog with recursion but without any wrappers
 
 doc contains the documentation, including reference manuals
 
