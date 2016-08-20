@@ -1,6 +1,8 @@
-==========================================
-This is the Evidential Tool Bus (ETB) v0.2
-==========================================
+[![PyPI version](https://badge.fury.io/py/EvidentialToolBus.svg)](https://badge.fury.io/py/EvidentialToolBus)
+
+
+Evidential Tool Bus (ETB)
+=========================
 
 The Evidential Tool Bus provides 
 
