@@ -11,6 +11,10 @@ all: unittests
 	 python ./handles.py && \
 	 python ./demos.py
 
+path:
+	@PYTHONPATH=$$PYTHONPATH \
+	python -c "import sys; print(sys.path)"
+
 unittests:
 	@echo "\n...\n...\n...\nRunning unit tests...\n"
 	@cd .. && \

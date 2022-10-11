@@ -25,7 +25,7 @@ This is significantly faster than pyparsing, while still being easy to install.
    <http://www.gnu.org/licenses/>.
 """
 
-import terms
+from . import terms
 import string
 import re
 from parsimonious.grammar import Grammar, NodeVisitor
@@ -111,32 +111,39 @@ class ETBParser(NodeVisitor):
     method = getattr(self, 'visit_' + node.expr_name, self.generic_visit)
     return method(node, [self.visit(n) for n in node])
     
-  def visit_statements(self, node, (_, statements)):
+  def visit_statements(self, node, x):
+    (_, statements) = x
     return statements
   
   def visit_statement(self, node, stmt):
     return stmt[0]
 
-  def visit_fact(self, node, (term, _)):
+  def visit_fact(self, node, x):
+    (term, _) = x
     #print 'visit_fact: term {0}: {1}'.format(term, type(term))
     return term
 
-  def visit_clause(self, node, (head, ts, tail, pd)):
+  def visit_clause(self, node, x):
+    (head, ts, tail, pd) = x
     return terms.DerivationRule(head, tail)
 
-  def visit_inference_rule(self, node, (head, inf, tail, pd)):
+  def visit_inference_rule(self, node, x):
+    (head, inf, tail, pd) = x
     return terms.InferenceRule(head, tail)
 
-  def visit_claims(self, node, (_, lk, claim, rest_claims, rk)):
+  def visit_claims(self, node, x):
+    (_, lk, claim, rest_claims, rk) = x
     if isinstance(rest_claims, list):
       return [claim] + rest_claims
     else:
       return [claim]
 
-  def visit_rest_claims(self, node, (_, claim)):
+  def visit_rest_claims(self, node, x):
+    (_, claim) = x
     return claim
 
-  def visit_claim(self, node, (ctype, lp, lit, co, re, _, eq, reason, rp)):
+  def visit_claim(self, node, x):
+    (ctype, lp, lit, co, re, _, eq, reason, rp) = x
     if ctype == "interpretedClaim":
       return terms.InterpretedClaim(lit, reason)
     elif ctype == "derivedClaim":
@@ -149,14 +156,16 @@ class ETBParser(NodeVisitor):
   def visit_reason(self, node, reason):
     return reason[0]
 
-  def visit_literals(self, node, (first_lit, rest_lits)):
+  def visit_literals(self, node, x):
+    (first_lit, rest_lits) = x
     #print 'visit_literals: first {0}: {1}, rest {2}: {3}'.format(first_lit, type(first_lit), rest_lits, type(rest_lits))
     if isinstance(rest_lits, list):
       return [first_lit] + rest_lits
     else:
       return [first_lit]
 
-  def visit_rest_lits(self, node, (_, lit)):
+  def visit_rest_lits(self, node, x):
+    (_, lit) = x
     #print 'visit_rest_lits: lit {0}: {1}'.format(lit, type(lit))
     return lit
 
@@ -164,7 +173,8 @@ class ETBParser(NodeVisitor):
     #print 'visit_literal: lit {0}: {1}'.format(lit[0], type(lit[0]))
     return lit[0]
 
-  def visit_infix_lit(self, node, (lhs, op, rhs)):
+  def visit_infix_lit(self, node, x):
+    (lhs, op, rhs) = x
     #print 'visit_infix_lit: lhs {0}: {1}'.format(lhs, type(lhs))
     #print 'visit_infix_lit: op {0}: {1}'.format(op, type(op))
     #print 'visit_infix_lit: rhs {0}: {1}'.format(rhs, type(rhs))
@@ -175,15 +185,18 @@ class ETBParser(NodeVisitor):
     binop = op[0]
     return binop
 
-  def visit_eq(self, node, (eq, _)):
+  def visit_eq(self, node, x):
+    (eq, _) = x
     #print 'visit_eq: eq {0}: {1}'.format(eq, type(eq))
     return '='
 
-  def visit_neq(self, node, (neq, _)):
+  def visit_neq(self, node, x):
+    (neq, _) = x
     #print 'visit_eq: eq {0}: {1}'.format(neq, type(neq))
     return '!='
 
-  def visit_app_lit(self, node, (pred, args)):
+  def visit_app_lit(self, node, x):
+    (pred, args) = x
     #print 'visit_app_lit: pred {0}: {1}, args {2}: {3}'.format(pred, type(pred), args, type(args))
     return terms.Literal(pred, args)
 
@@ -195,7 +208,8 @@ class ETBParser(NodeVisitor):
     else:
       return terms.IdConst(pred[0])
 
-  def visit_args(self, node, (lp, terms, rp)):
+  def visit_args(self, node, x):
+    (lp, terms, rp) = x
     #print 'visit_args: terms = {0}, type {1}'.format(terms[0], type(terms[0]))
     if isinstance(terms, list):
       return terms[0]
@@ -204,51 +218,60 @@ class ETBParser(NodeVisitor):
 
   # Substitutions
 
-  def visit_substitutions(self, node, (lk, substs, rk)):
+  def visit_substitutions(self, node, x):
+    (lk, substs, rk) = x
     if isinstance(substs, list):
       return substs[0]
     else:
       return []
 
-  def visit_substs(self, node, (subst, rest_substs)):
+  def visit_substs(self, node, x):
+    (subst, rest_substs) = x
     if isinstance(rest_substs, list):
       return [subst] + rest_substs
     else:
       return [subst]
 
-  def visit_rest_substs(self, node, (_, subst)):
+  def visit_rest_substs(self, node, x):
+    (_, subst) = x
     return subst
 
-  def visit_subst(self, node, (_, lp, bindings, rp)):
+  def visit_subst(self, node, x):
+    (_, lp, bindings, rp) = x
     if isinstance(bindings, list):
       return terms.Subst(dict(bindings[0]))
     else:
       return terms.Subst(dict())
 
-  def visit_bindings(self, node, (binding, rest_bindings)):
+  def visit_bindings(self, node, x):
+    (binding, rest_bindings) = x
     if isinstance(rest_bindings, list):
       return [binding] + rest_bindings
     else:
       return [binding]
 
-  def visit_rest_bindings(self, node, (_, binding)):
+  def visit_rest_bindings(self, node, x):
+    (_, binding) = x
     return binding
 
-  def visit_binding(self, node, (id, eq, term)):
+  def visit_binding(self, node, x):
+    (id, eq, term) = x
     if not id[0].isupper():
       raise TypeError('Identifier expected to be variable (i.e., capitalized) here')
     return (terms.Var(id), term)
 
   # Terms
 
-  def visit_terms(self, node, (term, rest_terms)):
+  def visit_terms(self, node, x):
+    (term, rest_terms) = x
     #print 'visit_terms: term {0}: {1}, rest_terms {0}: {1}'.format(term, type(term), rest_terms, type(rest_terms))
     if isinstance(rest_terms, list):
       return [term] + rest_terms
     else:
       return [term]
 
-  def visit_rest_terms(self, node, (_, term)):
+  def visit_rest_terms(self, node, x):
+    (_, term) = x
     #print 'visit_rest_terms: term {0}: {1}'.format(term, type(term))
     return term
 
@@ -273,7 +296,8 @@ class ETBParser(NodeVisitor):
     #print 'visit_const: {0}, type {1}'.format(term, type(term))
     return term
 
-  def visit_array(self, node, (lk, elems, rk, accesses)):
+  def visit_array(self, node, x):
+    (lk, elems, rk, accesses) = x
     #print 'visit_array: elems {0}: {1}, {2}: {3}'.format(elems, type(elems), accesses, type(accesses))
     if isinstance(elems, list):
       array = terms.mk_array(elems[0])
@@ -286,7 +310,8 @@ class ETBParser(NodeVisitor):
       #print 'visit_array: array = {0}, type {1}'.format(array, type(array))
       return array
 
-  def visit_obj(self, node, (lb, objpairs, rb, accesses)):
+  def visit_obj(self, node, x):
+    (lb, objpairs, rb, accesses) = x
     #print 'visit_obj: {0}: {1}, {2}: {3}'.format(objpairs, type(objpairs), accesses, type(accesses))
     if isinstance(objpairs, list):
       obj = terms.mk_map(objpairs[0])
@@ -298,7 +323,8 @@ class ETBParser(NodeVisitor):
       #print 'visit_array: array = {0}, type {1}'.format(array, type(array))
       return obj
 
-  def visit_objpairs(self, node, (objpair, rest_objpair)):
+  def visit_objpairs(self, node, x):
+    (objpair, rest_objpair) = x
     #print 'visit_objpairs: objpair {0}: {1}, other {2}: {3}'.format(objpair, type(objpair), rest_objpair, type(rest_objpair))
     #print 'visit_objpairs: objpair[1] {0}: {1}'.format(objpair[1], type(objpair[1]))
     if isinstance(rest_objpair, list):
@@ -306,22 +332,26 @@ class ETBParser(NodeVisitor):
     else:
       return dict([objpair])
 
-  def visit_rest_objpair(self, node, (_, objpair)):
+  def visit_rest_objpair(self, node, x):
+    (_, objpair) = x
     #print 'visit_rest_objpair: {0}: {1}'.format(objpair, type(objpair))
     return objpair
 
-  def visit_objpair(self, node, (token, cl, term)):
+  def visit_objpair(self, node, x):
+    (token, cl, term) = x
     #print 'visit_objpair: token {0}: {1}'.format(token, type(token))
     #print '                  term {0}: {1}'.format(term, type(term))
     if isinstance(token, terms.Var):
       raise TypeError('Identifier expected to be constant (i.e., not capitalized) here')
     return (token, term)
 
-  def visit_access(self, node, (lk, token, rk)):
+  def visit_access(self, node, x):
+    (lk, token, rk) = x
     #print 'visit_access: token {0}: {1}'.format(token, type(token))
     return token
 
-  def visit_id(self, node, (id, _)):
+  def visit_id(self, node, x):
+    (id, _) = x
     #print 'visit_id: {0}: {1}'.format(node, type(node))
     #print 'visit_id: {0}: {1}'.format(id.text, type(id.text))
     return id.text
@@ -330,13 +360,16 @@ class ETBParser(NodeVisitor):
     #print 'visit_string: {0}: {1}'.format(string[0], type(string[0]))
     return string[0]
 
-  def visit_dstring(self, node, (string, _)):
+  def visit_dstring(self, node, x):
+    (string, _) = x
     return string.text[1:-1]
 
-  def visit_sstring(self, node, (string, _)):
+  def visit_sstring(self, node, x):
+    (string, _) = x
     return string.text[1:-1]
 
-  def visit_num(self, node, (num, _)):
+  def visit_num(self, node, x):
+    (num, _) = x
     return num.text
 
   def generic_visit(self, node, visited_children):

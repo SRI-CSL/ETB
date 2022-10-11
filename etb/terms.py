@@ -229,7 +229,7 @@ def mk_term(obj):
     elif isinstance(obj, (list, tuple)):
         return mk_array(map(lambda x: mk_term(x), obj))
     elif isinstance(obj, dict):
-        return mk_map(map(lambda (x, y): (mk_stringconst(x), mk_term(y)), obj.iteritems()))
+        return mk_map(map(lambda (x, y): (mk_stringconst(x), mk_term(y)), obj.items()))
     elif isinstance(obj, bool):
         return mk_boolconst(obj)
     elif isinstance(obj, (int, float)):
