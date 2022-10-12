@@ -16,7 +16,7 @@ etb_guide.pdf : etb_guide.tex etb_tutorial.tex etb_setup.tex \
 #   pigments can be installed with: sudo easy_install Pygments
 
 %.tex: %.org
-	emacs --batch $< -f org-export-as-latex --kill
+	emacs --batch $< -f org-latex-export-to-latex --kill
 
 etb_wrappers.pdf: etb_wrappers.tex
 	@$(LATEXMK) $(LATEXMKFLAGS) etb_wrappers.tex
