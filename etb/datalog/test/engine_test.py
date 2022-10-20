@@ -1,23 +1,16 @@
 # this is the etb parser
-from ... import parser
-
-# these are the etb terms
-from ... import terms
-
-# datalogv2 stuff
-from .. import model
-from .. import index
-from .. import inference
-from .. import engine
-from .. import graph
-import unittest
+import logging
 import os
-
 # for threading test
 import threading
 import time
+import unittest
 
-import logging
+# these are the etb terms
+from etb import parser, terms
+# datalogv2 stuff
+from etb.datalog import engine, model
+
 
 class NullHandler(logging.Handler):
     def emit(self, record):
@@ -88,7 +81,7 @@ class TestEngine(unittest.TestCase):
         self.engine.add_goal(self.pab)
 
         #self.engine.add_claim(claim)
-        self.assertItemsEqual([returned_claim], self.engine.get_claims())
+        self.assertCountEqual([returned_claim], self.engine.get_claims())
 
     # def test_add_goal(self):
     #     self.engine.clear()
@@ -139,15 +132,15 @@ class TestEngine(unittest.TestCase):
         self.engine.clear()
         pending_rule = terms.Clause(self.qab, [])
         self.engine.add_pending_rule(pending_rule, external_goal=self.qab)
-        self.assertItemsEqual([self.qab], map(lambda claim: claim.literal, self.engine.get_claims()))
-
+        # self.assertItemsEqual([self.qab], [claim.literal for claim in self.engine.get_claims()])
+        self.assertCountEqual([self.qab], [claim.literal for claim in self.engine.get_claims()])
 
 
     def test_interpret(self):
         self.engine.clear()
         self.engine.add_goal(self.lt_2_4)
         self.engine.add_goal(self.lt_4_2)
-        self.assertItemsEqual([self.lt_2_4], map(lambda claim: claim.literal, self.engine.get_claims()))
+        self.assertCountEqual([self.lt_2_4], [claim.literal for claim in self.engine.get_claims()])
 
     def test_simple_program(self):
         self.engine.clear()
@@ -156,7 +149,7 @@ class TestEngine(unittest.TestCase):
         self.engine.add_rule(rule1, None)
         self.engine.add_rule(rule2, None)
         self.engine.add_goal(self.pXY)
-        self.assertItemsEqual([self.pab, self.eab], map(lambda claim: claim.literal, self.engine.get_claims()))
+        self.assertCountEqual([self.pab, self.eab], [claim.literal for claim in self.engine.get_claims()])
 
     def test_path1(self):
         self.engine.clear()
@@ -169,9 +162,9 @@ class TestEngine(unittest.TestCase):
         self.engine.add_rule(rule3, None)
         self.engine.add_rule(rule4, None)
         self.engine.add_goal(self.pathXY)
-        print('get_claims: {0}'.format(self.engine.get_claims()))
-        claims = map(lambda claim:claim.literal, self.engine.get_claims())
-        self.assertItemsEqual([self.pathab, self.pathac, self.pathbc, self.edgeab, self.edgebc], claims)
+        claims_list = self.engine.get_claims()
+        claims = set([claim.literal for claim in claims_list])
+        self.assertCountEqual([self.pathab, self.pathac, self.pathbc, self.edgeab, self.edgebc], claims)
 
     def test_is_renaming(self):
         self.engine.clear()
@@ -192,7 +185,7 @@ class TestEngine(unittest.TestCase):
         cl5 = parser.parse_literal('same_clique(1, 4)')
         cl6 = parser.parse_literal('same_clique(1, 5)')
         self.engine.add_goal(goal)
-        self.assertItemsEqual([cl1, cl2, cl3, cl4, cl5, cl6], map(lambda claim: claim.literal, self.engine.get_claims_matching_goal(goal)))
+        self.assertCountEqual([cl1, cl2, cl3, cl4, cl5, cl6], [claim.literal for claim in self.engine.get_claims_matching_goal(goal)])
 
     def test_get_substitutions(self):
         self.engine.clear()
@@ -205,7 +198,7 @@ class TestEngine(unittest.TestCase):
         subst1 = parser.parse('subst(X = a, Y = b)', 'subst')
         subst2 = parser.parse('subst(X = b, Y = c)', 'subst')
         subst3 = parser.parse('subst(X = a, Y = c)', 'subst')
-        self.assertItemsEqual([subst1, subst2, subst3], self.engine.get_substitutions(self.pathXY))
+        self.assertCountEqual([subst1, subst2, subst3], self.engine.get_substitutions(self.pathXY))
 
     # def test_entailed_program2_groundliterals(self):
     #     self.engine.clear()
@@ -273,20 +266,20 @@ class TestEngine(unittest.TestCase):
     def test_check_stuck_goals(self):
         self.engine.clear()
         self.engine.add_goal(self.gt_4_2)
-        self.assertItemsEqual([self.gt_4_2], self.engine.get_stuck_goals())
+        self.assertCountEqual([self.gt_4_2], self.engine.get_stuck_goals())
         # manually add a rule (if we add it via engine.add_rule, the goal would become
         # automatically unstuck; to test this we want to avoid that)
         rule = terms.Clause(self.gt_4_2, [self.qXY])
         internal_rule = self.engine.term_factory.mk_clause(rule)
         self.engine.inference_state.logical_state.db_add_rule(internal_rule)
         # now check that this indeed still kept the goal stuck
-        self.assertItemsEqual([self.gt_4_2], self.engine.get_stuck_goals())
+        self.assertCountEqual([self.gt_4_2], self.engine.get_stuck_goals())
         # force the engine to check its stuck goals
         self.engine.check_stuck_goals(["gt"])
         # and check that goal is indeed no longer stuck (cause there is a rule
         # that matches)
         stuck_goals = self.engine.get_stuck_goals()
-        self.assertItemsEqual([], self.engine.get_stuck_goals())
+        self.assertCountEqual([], self.engine.get_stuck_goals())
 
     def test_generate_png(self):
         self.engine.clear()
@@ -296,7 +289,14 @@ class TestEngine(unittest.TestCase):
         answer = self.engine.is_entailed(goal)
         claim = terms.Claim(goal,None)
         if answer:
-            filenames = self.engine.to_png(claim)
+            # Note (HAS) catching to_png()'s assertion error. 
+            # to_png() has a buggy generate_children() inner function.
+            filenames = None
+            try:
+                filenames = self.engine.to_png(claim)
+            except AssertionError as _:
+                self.fail("to_png() raised AssertionError unexpectedly!")
+
             if filenames:
                 os.remove(filenames[0])
 
@@ -495,7 +495,7 @@ class TestEngine(unittest.TestCase):
         res2 = parser.parse_literal('p(2)')
         self.engine.add_goal(goal)
         desired_results = [res1, res2]
-        self.assertItemsEqual(desired_results, map(lambda claim: claim.literal, self.engine.get_claims_matching_goal(goal)))
+        self.assertCountEqual(desired_results, [claim.literal for claim in self.engine.get_claims_matching_goal(goal)])
 
 
     def test_add_pending_rule_with_completion_interference(self):
@@ -547,7 +547,7 @@ class TestEngine(unittest.TestCase):
         time.sleep(0.1)
         annot = self.engine.get_goal_annotation(gt)
         self.engine.close()
-        print('annot.status = {0}'.format(annot.print_status()))
+        print(('annot.status = {0}'.format(annot.print_status())))
         self.engine.complete()
         result = self.engine.is_stuck_goal(gt)
         self.assertTrue(result)

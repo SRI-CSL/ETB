@@ -17,14 +17,16 @@ This module defines an API for writing tool wrappers.
    <http://www.gnu.org/licenses/>.
 """
 
-import os, subprocess
-import inspect
-import terms
 import copy
-import parser
+import inspect
 import logging
+import os
+import subprocess
 
 import pyparsing
+
+from . import parser, terms
+
 
 class ArgSpec(object):
     """
@@ -202,7 +204,8 @@ class BatchTool(Tool) :
             self.log.error(msg)
             self.fail('failed to start the external tool %s' % args[0])
 
-    def parseResult(self, (stdout, _stderr)) :
+    def parseResult(self, out_tuple) :
+        (stdout, _stderr) = out_tuple
         return stdout
 
     def run(self, result, *args) :
@@ -264,7 +267,7 @@ class InteractiveTool(Tool):
                  'tool': tool,
                  'session': new_id,
                  'timestamp': 0}
-        print('add_session: retval: %s' % retval)
+        print(('add_session: retval: %s' % retval))
         return retval
 
     def del_session(self, sid):
@@ -275,7 +278,7 @@ class InteractiveTool(Tool):
         if sid in self._sessions:
             print('before del')
             self._sessions.pop(sid)
-            print('deleted session number %s' % sid)
+            print(('deleted session number %s' % sid))
         else:
             self.fail('Error: invalid handle')
     
@@ -283,13 +286,13 @@ class InteractiveTool(Tool):
         """
         Check the validity (non-staleness) of a session handle against the session table.
         """
-        print('session_id: session: %s' % session)
-	print('sessions: %s' % self._sessions)
+        print(('session_id: session: %s' % session))
+        print(('sessions: %s' % self._sessions))
         sid = session['session']
-        print('sid: %s' % sid)
+        print(('sid: %s' % sid))
         if int(sid.val) in self._sessions:
             s_entry = self._sessions[int(sid.val)]
-            print('session_id: s_entry: %s' % s_entry)
+            print(('session_id: s_entry: %s' % s_entry))
             if (terms.StringConst(s_entry['timestamp']) == session['timestamp']):
                 return int(sid.val)
             else :
@@ -376,7 +379,7 @@ class Result(object):
     """
     The parent class of all results returned by a wrapper.
 
-    This little hiearchy is to isolate the new wrapper API and 
+    This little hierarchy is to isolate the new wrapper API and 
     enable easy error detection. If a wrapper returns something 
     that does not subclass this class, then presumably it is using
     the old API and needs to be updated.
@@ -448,7 +451,7 @@ class Errors(Result):
         if not isinstance(reasons, list):
             reasons = [reasons]
         for r in reasons:
-            if isinstance(r, basestring):
+            if isinstance(r, str):
                 err = 'error("{0}", "{1}")'.format(repr(tool),  r)
                 self.log.info('Errors: err {0}: {1}'.format(err, type(err)))
                 lit = parser.parse_literal(err)
@@ -519,13 +522,14 @@ class Substitutions(Result):
         """
         pending_rules = []
         adder = lambda s: pending_rules.append(terms.InferenceRule(s(goal), [], temp=True))
-        map(adder, self.substitutions)
+        # TODO You should use a for loop here, not a map
+        list(map(adder, self.substitutions))
         return pending_rules
 
 def parselemma(q): 
     if isinstance(q, terms.Literal):
         return q
-    elif isinstance(q, basestring):
+    elif isinstance(q, str):
         return parser.parse_literal(q)
     else:
         raise ValueError('Lemmata subgoal: {0} must be a literal or string'
@@ -587,5 +591,6 @@ class Lemmata(Substitutions):
     def get_pending_rules(self, goal):
         pending_rules = []
         adder = lambda s, ll: pending_rules.append(terms.InferenceRule(s(goal), [ s(q) for q in ll], temp=True))
-        map(adder, self.substitutions, self.lemmatas)
+        # TODO You should use a for loop here, not a map
+        list(map(adder, self.substitutions, self.lemmatas))
         return pending_rules

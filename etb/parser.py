@@ -26,8 +26,6 @@ This is significantly faster than pyparsing, while still being easy to install.
 """
 
 from . import terms
-import string
-import re
 from parsimonious.grammar import Grammar, NodeVisitor
 from parsimonious.exceptions import ParseError, IncompleteParseError
 
@@ -111,39 +109,39 @@ class ETBParser(NodeVisitor):
     method = getattr(self, 'visit_' + node.expr_name, self.generic_visit)
     return method(node, [self.visit(n) for n in node])
     
-  def visit_statements(self, node, x):
-    (_, statements) = x
+  def visit_statements(self, node, statements_tuple):
+    (_, statements) = statements_tuple
     return statements
   
   def visit_statement(self, node, stmt):
     return stmt[0]
 
-  def visit_fact(self, node, x):
-    (term, _) = x
+  def visit_fact(self, node, term_tuple):
     #print 'visit_fact: term {0}: {1}'.format(term, type(term))
+    (term, _) = term_tuple
     return term
 
-  def visit_clause(self, node, x):
-    (head, ts, tail, pd) = x
+  def visit_clause(self, node, clause_tuple):
+    (head, ts, tail, pd) = clause_tuple
     return terms.DerivationRule(head, tail)
 
-  def visit_inference_rule(self, node, x):
-    (head, inf, tail, pd) = x
+  def visit_inference_rule(self, node, inference_rule_tuple):
+    (head, inf, tail, pd) = inference_rule_tuple
     return terms.InferenceRule(head, tail)
 
-  def visit_claims(self, node, x):
-    (_, lk, claim, rest_claims, rk) = x
+  def visit_claims(self, node, claims_tuple):
+    (_, lk, claim, rest_claims, rk) = claims_tuple
     if isinstance(rest_claims, list):
       return [claim] + rest_claims
     else:
       return [claim]
 
-  def visit_rest_claims(self, node, x):
-    (_, claim) = x
+  def visit_rest_claims(self, node, claim_tuple):
+    (_, claim) = claim_tuple
     return claim
 
-  def visit_claim(self, node, x):
-    (ctype, lp, lit, co, re, _, eq, reason, rp) = x
+  def visit_claim(self, node, claim_tuple):
+    (ctype, lp, lit, co, re, _, eq, reason, rp) = claim_tuple
     if ctype == "interpretedClaim":
       return terms.InterpretedClaim(lit, reason)
     elif ctype == "derivedClaim":
@@ -156,28 +154,28 @@ class ETBParser(NodeVisitor):
   def visit_reason(self, node, reason):
     return reason[0]
 
-  def visit_literals(self, node, x):
-    (first_lit, rest_lits) = x
+  def visit_literals(self, node, literals_tuple):
     #print 'visit_literals: first {0}: {1}, rest {2}: {3}'.format(first_lit, type(first_lit), rest_lits, type(rest_lits))
+    (first_lit, rest_lits) = literals_tuple
     if isinstance(rest_lits, list):
       return [first_lit] + rest_lits
     else:
       return [first_lit]
 
-  def visit_rest_lits(self, node, x):
-    (_, lit) = x
+  def visit_rest_lits(self, node, rest_lits_tuple):
     #print 'visit_rest_lits: lit {0}: {1}'.format(lit, type(lit))
+    (_, lit) = rest_lits_tuple
     return lit
 
   def visit_literal(self, node, lit):
     #print 'visit_literal: lit {0}: {1}'.format(lit[0], type(lit[0]))
     return lit[0]
 
-  def visit_infix_lit(self, node, x):
-    (lhs, op, rhs) = x
+  def visit_infix_lit(self, node, infix_lit_tuple):
     #print 'visit_infix_lit: lhs {0}: {1}'.format(lhs, type(lhs))
     #print 'visit_infix_lit: op {0}: {1}'.format(op, type(op))
     #print 'visit_infix_lit: rhs {0}: {1}'.format(rhs, type(rhs))
+    (lhs, op, rhs) = infix_lit_tuple
     return terms.InfixLiteral(op, [lhs, rhs])
 
   def visit_binop(self, node, op):
@@ -185,19 +183,19 @@ class ETBParser(NodeVisitor):
     binop = op[0]
     return binop
 
-  def visit_eq(self, node, x):
-    (eq, _) = x
+  def visit_eq(self, node, eq_tuple):
     #print 'visit_eq: eq {0}: {1}'.format(eq, type(eq))
+    (eq, _) = eq_tuple
     return '='
 
-  def visit_neq(self, node, x):
-    (neq, _) = x
+  def visit_neq(self, node, neq_tuple):
     #print 'visit_eq: eq {0}: {1}'.format(neq, type(neq))
+    (neq, _) = neq_tuple
     return '!='
 
-  def visit_app_lit(self, node, x):
-    (pred, args) = x
+  def visit_app_lit(self, node, app_lit_tuple):
     #print 'visit_app_lit: pred {0}: {1}, args {2}: {3}'.format(pred, type(pred), args, type(args))
+    (pred, args) = app_lit_tuple
     return terms.Literal(pred, args)
 
   def visit_pred(self, node, pred):
@@ -208,9 +206,9 @@ class ETBParser(NodeVisitor):
     else:
       return terms.IdConst(pred[0])
 
-  def visit_args(self, node, x):
-    (lp, terms, rp) = x
+  def visit_args(self, node, args_tuple):
     #print 'visit_args: terms = {0}, type {1}'.format(terms[0], type(terms[0]))
+    (lp, terms, rp) = args_tuple
     if isinstance(terms, list):
       return terms[0]
     else:
@@ -218,61 +216,61 @@ class ETBParser(NodeVisitor):
 
   # Substitutions
 
-  def visit_substitutions(self, node, x):
-    (lk, substs, rk) = x
+  def visit_substitutions(self, node, substitutions_tuple):
+    (lk, substs, rk) = substitutions_tuple
     if isinstance(substs, list):
       return substs[0]
     else:
       return []
 
-  def visit_substs(self, node, x):
-    (subst, rest_substs) = x
+  def visit_substs(self, node, substs_tuple):
+    (subst, rest_substs) = substs_tuple
     if isinstance(rest_substs, list):
       return [subst] + rest_substs
     else:
       return [subst]
 
-  def visit_rest_substs(self, node, x):
-    (_, subst) = x
+  def visit_rest_substs(self, node, rest_substs_tuple):
+    (_, subst) = rest_substs_tuple
     return subst
 
-  def visit_subst(self, node, x):
-    (_, lp, bindings, rp) = x
+  def visit_subst(self, node, subst_tuple):
+    (_, lp, bindings, rp) = subst_tuple
     if isinstance(bindings, list):
       return terms.Subst(dict(bindings[0]))
     else:
       return terms.Subst(dict())
 
-  def visit_bindings(self, node, x):
-    (binding, rest_bindings) = x
+  def visit_bindings(self, node, bindings_tuple):
+    (binding, rest_bindings) = bindings_tuple
     if isinstance(rest_bindings, list):
       return [binding] + rest_bindings
     else:
       return [binding]
 
-  def visit_rest_bindings(self, node, x):
-    (_, binding) = x
+  def visit_rest_bindings(self, node, rest_bindings_tuple):
+    (_, binding) = rest_bindings_tuple
     return binding
 
-  def visit_binding(self, node, x):
-    (id, eq, term) = x
+  def visit_binding(self, node, binding_tuple):
+    (id, eq, term) = binding_tuple
     if not id[0].isupper():
       raise TypeError('Identifier expected to be variable (i.e., capitalized) here')
     return (terms.Var(id), term)
 
   # Terms
 
-  def visit_terms(self, node, x):
-    (term, rest_terms) = x
+  def visit_terms(self, node, terms_tuple):
     #print 'visit_terms: term {0}: {1}, rest_terms {0}: {1}'.format(term, type(term), rest_terms, type(rest_terms))
+    (term, rest_terms) = terms_tuple
     if isinstance(rest_terms, list):
       return [term] + rest_terms
     else:
       return [term]
 
-  def visit_rest_terms(self, node, x):
-    (_, term) = x
+  def visit_rest_terms(self, node, rest_terms_tuple):
     #print 'visit_rest_terms: term {0}: {1}'.format(term, type(term))
+    (_, term) = rest_terms_tuple
     return term
 
   def visit_term(self, node, term):
@@ -296,9 +294,9 @@ class ETBParser(NodeVisitor):
     #print 'visit_const: {0}, type {1}'.format(term, type(term))
     return term
 
-  def visit_array(self, node, x):
-    (lk, elems, rk, accesses) = x
+  def visit_array(self, node, array_tuple):
     #print 'visit_array: elems {0}: {1}, {2}: {3}'.format(elems, type(elems), accesses, type(accesses))
+    (lk, elems, rk, accesses) = array_tuple
     if isinstance(elems, list):
       array = terms.mk_array(elems[0])
     else:
@@ -310,9 +308,9 @@ class ETBParser(NodeVisitor):
       #print 'visit_array: array = {0}, type {1}'.format(array, type(array))
       return array
 
-  def visit_obj(self, node, x):
-    (lb, objpairs, rb, accesses) = x
+  def visit_obj(self, node, obj_tuple):
     #print 'visit_obj: {0}: {1}, {2}: {3}'.format(objpairs, type(objpairs), accesses, type(accesses))
+    (lb, objpairs, rb, accesses) = obj_tuple
     if isinstance(objpairs, list):
       obj = terms.mk_map(objpairs[0])
     else:
@@ -323,53 +321,53 @@ class ETBParser(NodeVisitor):
       #print 'visit_array: array = {0}, type {1}'.format(array, type(array))
       return obj
 
-  def visit_objpairs(self, node, x):
-    (objpair, rest_objpair) = x
+  def visit_objpairs(self, node, objpairs_tuple):
     #print 'visit_objpairs: objpair {0}: {1}, other {2}: {3}'.format(objpair, type(objpair), rest_objpair, type(rest_objpair))
     #print 'visit_objpairs: objpair[1] {0}: {1}'.format(objpair[1], type(objpair[1]))
+    (objpair, rest_objpair) = objpairs_tuple
     if isinstance(rest_objpair, list):
       return dict([objpair] + rest_objpair)
     else:
       return dict([objpair])
 
-  def visit_rest_objpair(self, node, x):
-    (_, objpair) = x
+  def visit_rest_objpair(self, node, rest_objpair_tuple):
     #print 'visit_rest_objpair: {0}: {1}'.format(objpair, type(objpair))
+    (_, objpair) = rest_objpair_tuple
     return objpair
 
-  def visit_objpair(self, node, x):
-    (token, cl, term) = x
+  def visit_objpair(self, node, objpair_tuple):
     #print 'visit_objpair: token {0}: {1}'.format(token, type(token))
     #print '                  term {0}: {1}'.format(term, type(term))
+    (token, cl, term) = objpair_tuple
     if isinstance(token, terms.Var):
       raise TypeError('Identifier expected to be constant (i.e., not capitalized) here')
     return (token, term)
 
-  def visit_access(self, node, x):
-    (lk, token, rk) = x
+  def visit_access(self, node, access_tuple):
     #print 'visit_access: token {0}: {1}'.format(token, type(token))
+    (lk, token, rk) = access_tuple
     return token
 
-  def visit_id(self, node, x):
-    (id, _) = x
+  def visit_id(self, node, id_tuple):
     #print 'visit_id: {0}: {1}'.format(node, type(node))
     #print 'visit_id: {0}: {1}'.format(id.text, type(id.text))
+    (id, _) = id_tuple
     return id.text
 
   def visit_string(self, node, string):
     #print 'visit_string: {0}: {1}'.format(string[0], type(string[0]))
     return string[0]
 
-  def visit_dstring(self, node, x):
-    (string, _) = x
+  def visit_dstring(self, node, dstring_tuple):
+    (string, _) = dstring_tuple
     return string.text[1:-1]
 
-  def visit_sstring(self, node, x):
-    (string, _) = x
+  def visit_sstring(self, node, sstring_tuple):
+    (string, _) = sstring_tuple
     return string.text[1:-1]
 
-  def visit_num(self, node, x):
-    (num, _) = x
+  def visit_num(self, node, num_tuple):
+    (num, _) = num_tuple
     return num.text
 
   def generic_visit(self, node, visited_children):
@@ -403,13 +401,13 @@ def parse(text, nt='statements'):
     node = grammar[nt].parse(text.strip())
     return ETBParser().visit(node)
   except IncompleteParseError as iperr:
-    raise ValueError(u"{0} has extra text: '{1}' (line {2}, column {3}).".format(
+    raise ValueError("{0} has extra text: '{1}' (line {2}, column {3}).".format(
       iperr.expr.name, iperr.text[iperr.pos:iperr.pos + 20],
       iperr.line(), iperr.column()))
   except ParseError as perr:
-    rule_name = ((u"{0}".format(perr.expr.name)) if perr.expr.name else
-                 unicode(perr.expr))
-    raise ValueError(u"{0} expected at '{1}' (line {2}, column {3})."
+    rule_name = (("{0}".format(perr.expr.name)) if perr.expr.name else
+                 str(perr.expr))
+    raise ValueError("{0} expected at '{1}' (line {2}, column {3})."
                      .format(rule_name, perr.text[perr.pos:perr.pos + 20],
                              perr.line(), perr.column()))
     
@@ -422,5 +420,5 @@ def parse_literal(text):
   
 def parse_file(file, nt='statements'):
   with open(file, 'rb') as fd:
-    text = fd.read()
+    text = fd.read().decode('utf-8')
   return parse(text, nt)

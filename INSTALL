@@ -30,6 +30,8 @@ installation instruction. The required modules are:
   - pydot
   - graphviz
   - colorama
+  - pyreadline
+  - Twisted
 
   
 MacOSX and Linux:

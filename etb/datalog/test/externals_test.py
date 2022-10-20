@@ -1,5 +1,8 @@
-from .. import externals
+
 import unittest
+
+from etb.datalog import externals
+
 
 class TestExternals(unittest.TestCase):
         

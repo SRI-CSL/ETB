@@ -1,10 +1,9 @@
 
-from etb_manager import ETBNetwork
-from etb_tests import etb_test, ETBTest
-
 import etb.terms
 
-import json
+from etb_manager import ETBNetwork
+from etb_tests import ETBTest, etb_test
+
 
 class PingPongTest(ETBTest):
 

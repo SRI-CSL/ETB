@@ -1,11 +1,8 @@
-from ... import terms
-from ... import parser
-from .. import index
-from .. import model
-from .. import engine
-from .. import graph
 import unittest
-import os
+
+from etb import parser, terms
+from etb.datalog import engine, graph, index, model
+
 
 class TestModel(unittest.TestCase):
         
@@ -132,7 +129,7 @@ class TestModel(unittest.TestCase):
         internal_literal2 = self.tf.mk_literal(term2)
         closed_literals = self.tf.close_literals([internal_literal,
             internal_literal2])
-        self.assertItemsEqual(closed_literals, [term1, term2])
+        self.assertCountEqual(closed_literals, [term1, term2])
 
     def test_readable_clause(self):
         self.tf.clear()
@@ -436,8 +433,8 @@ class TestModel(unittest.TestCase):
         prule = self.logical_state.db_add_pending_rule(i_clause2)
         self.logical_state.db_add_claim(prule)
         specializations = [prule.clause for prule in index.get_candidate_specializations(self.logical_state.db_claims,internal_literal)]
-        print('internal_literal = {0}'.format(internal_literal))
-        print('specials = {0}'.format(specializations))
+        print(('internal_literal = {0}'.format(internal_literal)))
+        print(('specials = {0}'.format(specializations)))
         self.assertTrue((internal_literal,) in specializations)
 
     def test_db_add_goal(self):

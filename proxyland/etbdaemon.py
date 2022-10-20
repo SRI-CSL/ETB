@@ -2,7 +2,7 @@
 
 import time, os, sys
 
-from daemon import Daemon
+from .daemon import Daemon
 
 class ETBDaemon(Daemon):
 

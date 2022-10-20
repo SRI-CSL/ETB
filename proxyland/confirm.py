@@ -1,14 +1,10 @@
 
+from twisted.internet import threads
 from twisted.web.resource import Resource
 from twisted.web.server import NOT_DONE_YET
 
-from twisted.internet import threads
-
-from utils import Utils
-
-import subprocess, threading
-
-from spawn import ETBSpawner
+from .spawn import ETBSpawner
+from .utils import Utils
 
 
 class Confirm(Resource):

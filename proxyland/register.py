@@ -1,17 +1,16 @@
 
-from twisted.web.resource import Resource
-from twisted.web.server import NOT_DONE_YET
-from twisted.internet.defer import Deferred
-from twisted.internet import threads
-
-from utils import Utils
-
-from email.utils import parseaddr
-from email.mime.text import MIMEText
-
 import cgi
 import smtplib
-import xmlrpclib
+import xmlrpc.client
+from email.mime.text import MIMEText
+from email.utils import parseaddr
+
+from twisted.internet import threads
+from twisted.web.resource import Resource
+from twisted.web.server import NOT_DONE_YET
+
+from .utils import Utils
+
 
 class Register(Resource):
     isLeaf = True
@@ -75,7 +74,7 @@ class Register(Resource):
     def _delayed_render_POST(self, result):
         yada = ''
         if result:
-            e_id, e_email, e_ip, e_port = map(cgi.escape, (self.id, self.email, self.ip, self.port))
+            e_id, e_email, e_ip, e_port = list(map(cgi.escape, (self.id, self.email, self.ip, self.port)))
             yada = self._response.format(e_id, e_email, e_ip, e_port, result)
         else:
             yada = self._error.format(self._reason)
@@ -113,12 +112,12 @@ class Register(Resource):
     def _processPost(self):
         #validate the email address
         if(not self._validateEmail()):
-            print "validateEmail failed!"
+            print("validateEmail failed!")
             self._delayed_render_POST(False);
             return
         #ping the etb server
         if(not self._validateServer()):
-            print "validateServer failed!"
+            print("validateServer failed!")
             self._delayed_render_POST(False);
             return
         #create the database entries
@@ -132,11 +131,11 @@ class Register(Resource):
     def _validateServer(self):
         uri = "http://{host}:{port}" . format(host=self.ip, port=self.port)
         try:
-            proxy = xmlrpclib.ServerProxy(uri)
+            proxy = xmlrpc.client.ServerProxy(uri)
             proxy.test()
         except Exception as e:
             self._reason = 'your server needs to be up and running (and accessible) before I make the effort of creating you one of our nodes.'
-            print  e
+            print(e)
             return False
         return True
 
@@ -152,10 +151,10 @@ class Register(Resource):
         msg['Subject'] = 'ETB Confirmation email'
         msg['From'] = me
         msg['To'] = you
-        print "Attempting to send email!"
+        print("Attempting to send email!")
         mail_server = smtplib.SMTP(mail_server_name, mail_server_port)
         mail_server.sendmail(me, [you], msg.as_string())
         mail_server.quit()       
-        print "Email sent!"
+        print("Email sent!")
         return True
     

@@ -27,10 +27,10 @@ try:
 except:
     import pyreadline
 #import argparse
-import xmlrpclib
+import xmlrpc.client
 import codecs, base64
 import json
-import terms
+from . import terms
 
 def wrap_xmlrpcfault(method):
     '''
@@ -40,7 +40,7 @@ def wrap_xmlrpcfault(method):
     def wrapper(*args, **kwargs):
         try:
             return method(*args, **kwargs)
-        except xmlrpclib.Fault as e:
+        except xmlrpc.client.Fault as e:
             raise Exception (e.faultString.split(':', 1)[1])
     return wrapper
 
@@ -75,7 +75,7 @@ class ETBClient(object):
         if self._url == None:
             raise Exception('Error: no ETB server configured.')
         try:
-            proxy = xmlrpclib.ServerProxy(self._url)
+            proxy = xmlrpc.client.ServerProxy(self._url)
             proxy.test()
         except:
             raise Exception('Error: cannot connect to the ETB at %s.' % self._url)
@@ -110,16 +110,16 @@ class ETBClient(object):
         src = os.path.expanduser(src.strip('"').strip('\''))
         if dst is None:
             if os.path.isabs(src):
-                print 'error: put_file(<src>), <src> should be relative, or use put_file(<src>, <dst).'
+                print('error: put_file(<src>), <src> should be relative, or use put_file(<src>, <dst).')
                 return
             if src.find('..') != -1:
-                print 'error: put_file(<src>), <src> should be below the current working directory.'
+                print('error: put_file(<src>), <src> should be below the current working directory.')
                 return
             else:
                 dst = src
         src = os.path.abspath(src)
         if not os.path.exists(src):
-            print 'error: file not found %s' % src
+            print('error: file not found %s' % src)
             return
 
         if os.path.isdir(src):
@@ -166,7 +166,7 @@ class ETBClient(object):
                 os.makedirs(ndir)
             with codecs.open(dst, mode='wb', errors='ignore') as fd:
                 fd.write(base64.b64decode(contents))
-        elif isinstance(src, basestring):
+        elif isinstance(src, str):
             # Just get whatever version is in the working (Git) directory
             shandle = self.etb().get_filehandle(src)
             handle = json.loads(shandle)
@@ -179,7 +179,7 @@ class ETBClient(object):
     @wrap_xmlrpcfault
     def get_filehandle(self, path):
         if path  is None:
-            print 'warning: cannot get file handle to None'
+            print('warning: cannot get file handle to None')
             return
         handle  = self.etb().get_filehandle(path)
         return handle

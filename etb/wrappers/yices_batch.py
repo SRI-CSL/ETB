@@ -6,11 +6,12 @@ class Yices_batch(BatchTool):
     ETB wrapper for Yices invoked as a batch tool.
     '''
     
-    def parseResult(self, (stdout, stderr)):
+    def parseResult(self, out_tuple):
         '''
         Override the default result parser of the BatchTool class:
         returns 'sat', 'unsat' or 'unknown'
         '''
+        (stdout, stderr) = out_tuple
         if re.search('^sat', stdout):
             return 'sat'
         elif re.search('^unsat', stdout):

@@ -18,22 +18,19 @@ nodes.
    <http://www.gnu.org/licenses/>.
 """
 
-import codecs, base64
+import base64
+import codecs
 import logging
-import sys, os, platform, threading
+import os
+import platform
 import re
-import uuid
+import threading
 import traceback
-from Queue import Queue, Empty
+import uuid
+from queue import Empty, Queue
 
-import datalog.engine
-import git_interface
-import interpret_state
-
-import networking
-import terms
-import utils
-import wrapper
+from . import git_interface, interpret_state, networking, terms, utils, wrapper
+from .datalog import engine
 
 
 class ETB(object) :
@@ -104,7 +101,7 @@ class ETB(object) :
         self.interpret_state.load_wrappers()
 
         # Start the engine
-        self.engine = datalog.engine.Engine(self.interpret_state)
+        self.engine = engine.Engine(self.interpret_state)
 
         # to run tasks periodically (also used by networking)
         self.cron = utils.CronJob(self, period=self.config.cron_period)
@@ -293,11 +290,11 @@ class ETB(object) :
 
     @property
     def queries(self):
-        return self._queries.keys()
+        return list(self._queries.keys())
 
     @property
     def done_queries(self):
-        return self._done_queries.keys()
+        return list(self._done_queries.keys())
     
     def query_answers(self, qid):
         """Returns the current list of answers for the given query. (list
@@ -326,7 +323,7 @@ class ETB(object) :
         """Find claims satisfying test.
         If test is a string, it is taken as an re pattern.
         Otherwise, it is expected to be a callable of """
-        if isinstance(test, basestring):
+        if isinstance(test, str):
             pat = test
             # If need to convert to raw, use pat.encode('string-escape')
             self.log.debug('find_claims: pat = {0}: {1}, {2}'.format(pat, type(pat), len(pat)))
@@ -457,7 +454,7 @@ class ETB(object) :
     def filter_candidates(self, candidates, goal) :
         """Filter candidate nodes by handle information"""
         for arg in goal.args :
-            if isinstance(arg, dict) and arg.has_key('etb') :
+            if isinstance(arg, dict) and 'etb' in arg :
                 candidates = [ c for c in candidates if c.id == arg['etb'] ]
         return candidates
 

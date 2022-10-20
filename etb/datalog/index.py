@@ -22,6 +22,7 @@ of facts.
    Public License along with this program.  If not, see
    <http://www.gnu.org/licenses/>.
 """
+from functools import reduce
 
 def add_to_index(index, key, value):
     """
@@ -166,10 +167,26 @@ def in_index(index, key, value):
             else:
                 return False
 
-    normalized_key = [x if x>= 0 else -1 for x in key]
+    # XXX: This is a hack to make the index work with tuples.
+    # Python 2.7 is ok with using comparison operators with tuples, 
+    # but Python 3.+ does not like it. It throw this type error:
+    # TypeError: '>=' not supported between instances of 'tuple' and 'int'
+    def normalize_x(x):
+        # Map all negative integers to -1 (we treat all 
+        # variables the same).
+        if isinstance(x, int):
+            return x if x>= 0 else -1
+        elif isinstance(x, tuple):
+            x_tpl = [xx if xx>= 0 else -1 for xx in x]
+            return x_tpl
+    # normalized_key = [x if x[0]>= 0 else -1 for x in key]
+    normalized_key = [normalize_x(x) for x in key]
     predicate = normalized_key.pop(0)
-    if predicate in index:
-        return iter(index[predicate], normalized_key)
+    # XXX checking a list is in dict throw a type error:
+    # TypeError: unhashable type: 'list'. Python 2.7 is ok with it.
+    pred = tuple(predicate) if isinstance(predicate, list) else predicate
+    if pred in index:
+        return iter(index[pred], normalized_key)
     else:
         return False
 
@@ -186,7 +203,7 @@ def traverse(index):
         index in the first place)
     """
     if isinstance(index, dict):
-        return reduce(lambda x,y: x+y, [traverse(index[c]) for c in index.keys()])
+        return reduce(lambda x,y: x+y, [traverse(index[c]) for c in list(index.keys())])
     else:
         return index
 
@@ -306,7 +323,7 @@ def get_candidate_specializations(index, key):
         elif k[0] == -1:
             k2 = list(k)
             k2.pop(0)
-            return reduce(lambda x,y: x+y, map(lambda c:   iter(node[c],k2), [constant for constant in node.keys() if constant > 0 ]))
+            return reduce(lambda x,y: x+y, [iter(node[c],k2) for c in [constant for constant in node.keys() if constant > 0 ]])
         # The argument in the key is a constant: more specific is the same
         # constant.
         else:
@@ -353,14 +370,13 @@ def get_candidate_matchings(index, key):
         elif k[0] == -1:
             k2 = list(k)
             k2.pop(0)
-            return reduce(lambda x,y: x+y, map(lambda c: iter(node[c], k2), node.keys()))
+            return reduce(lambda x,y: x+y, [iter(node[c], k2) for c in list(node.keys())])
         # The argument in the key is a constant: matching is only that constant
         # _or_ a variable.
         else:
             k2 = list(k)
             arg = k2.pop(0)
-            mm = map(lambda c: iter(node[c],k2),
-                     [d for d in node.keys() if d == arg or d == -1])
+            mm = [iter(node[c],k2) for c in [d for d in list(node.keys()) if d == arg or d == -1]]
             return reduce(lambda x,y: x+y, mm, [])
     normalized_key = [x if x >= 0 else -1 for x in key]
     predicate = normalized_key.pop(0)

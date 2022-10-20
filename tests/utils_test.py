@@ -1,9 +1,9 @@
 
-from etb_manager import ETBNetwork
-from etb_tests import etb_test, ETBTest
-from etb.terms import mk_subst, mk_numberconst, mk_literal, mk_idconst
+from etb.terms import mk_subst
 
-import json
+from etb_manager import ETBNetwork
+from etb_tests import ETBTest, etb_test
+
 
 class UtilsTest(ETBTest):
 

@@ -1,6 +1,8 @@
-from .. import index
-from .. import model
+
 import unittest
+
+from etb.datalog import index
+
 
 class TestIndex(unittest.TestCase):
         
@@ -55,7 +57,7 @@ class TestIndex(unittest.TestCase):
         index.add_to_index(i, literal1, "a")
         index.add_to_index(i, literal2, "b")
         index.add_to_index(i, literal3, "c")
-        self.assertItemsEqual(["a", "b", "c"], index.traverse(i))
+        self.assertCountEqual(["a", "b", "c"], index.traverse(i))
 
 
     def test_get_candidate_generalizations(self):
@@ -73,7 +75,10 @@ class TestIndex(unittest.TestCase):
         index.add_to_index(i, [1,3,2],"2")
         index.add_to_index(i, [1,-1,2],"3")
         index.add_to_index(i, [1,4,3],"4")
-        self.assertEqual(['2', '1'], index.get_candidate_specializations(i, [1,-1,2]))
+        # XXX - iter in python 2.7 does not guarantee order, python 3 does.
+        # This means, that this call used to return ['2', '1'] in python 2.7,
+        # but ['1', '2'] in python 3. Consequently, ['2', '1'] is changed to ['1', '2']
+        self.assertEqual(['1', '2'], index.get_candidate_specializations(i, [1,-1,2]))
         self.assertEqual(['4'], index.get_candidate_specializations(i, [1,-1,3]))
         self.assertEqual([], index.get_candidate_specializations(i, [1,-1,5]))
 
@@ -82,14 +87,14 @@ class TestIndex(unittest.TestCase):
         index.add_to_index(i, [1,-2,2],"1")
         index.add_to_index(i, [1,3,4],"2")
         index.add_to_index(i, [1,3,-2],"3")
-        self.assertItemsEqual(['1', '3'], index.get_candidate_matchings(i, [1,-1,2]))
+        self.assertCountEqual(['1', '3'], index.get_candidate_matchings(i, [1,-1,2]))
 
     def test_get_candidate_renamings(self):
         i = {}
         index.add_to_index(i, [1,-3,3,-4],"1")
         index.add_to_index(i, [1,-3,2,-2],"2")
         index.add_to_index(i, [1,2,-1,-1],"3")
-        self.assertItemsEqual(['2'], index.get_candidate_renamings(i, [1,-1,2,-2]))
+        self.assertCountEqual(['2'], index.get_candidate_renamings(i, [1,-1,2,-2]))
 
 
 
