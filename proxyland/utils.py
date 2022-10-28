@@ -1,4 +1,4 @@
-import uuid, xmlrpclib, socket
+import uuid, xmlrpc.client, socket
 
 class Utils: 
 
@@ -9,7 +9,7 @@ class Utils:
     @staticmethod
     def server_is_up(host, port):
         url = "http://{0}:{1}".format(host, port)
-        server = xmlrpclib.Server(url)
+        server = xmlrpc.client.Server(url)
         try: 
             server.test()
         except Exception as e:

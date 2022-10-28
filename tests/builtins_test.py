@@ -1,6 +1,7 @@
 
 from etb_manager import ETBNetwork
-from etb_tests import etb_test, ETBTest
+from etb_tests import ETBTest, etb_test
+
 
 class BuiltinsTest(ETBTest):
 

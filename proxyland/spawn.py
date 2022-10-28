@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 
-import time, os, sys, xmlrpclib, sqlite3
+import time, os, sys, xmlrpc.client, sqlite3
 
-from etbdaemon import ETBDaemon
+from .etbdaemon import ETBDaemon
 
-from utils import Utils
+from .utils import Utils
 
 class ETBSpawner():
 
@@ -36,7 +36,7 @@ class ETBSpawner():
                 if not self.link_etbs(local):
                     return (False, 'linking the two etbds failed')
                 return (True, '')
-        except Exception, e:
+        except Exception as e:
             return (False, str(e))
 
 
@@ -64,10 +64,10 @@ class ETBSpawner():
             pid = os.fork() 
             if pid == 0:
                 ETBDaemon(etbd, errorfile, pidfile, self.directory, self.port).start()
-        except OSError, e: 
+        except OSError as e: 
             return False
 
-        print '{0} Forked: {1} with pidfile {2}'.format(os.getpid(), pid, pidfile)
+        print('{0} Forked: {1} with pidfile {2}'.format(os.getpid(), pid, pidfile))
 
         retries_remaining = 10
         success = False
@@ -77,7 +77,7 @@ class ETBSpawner():
                 break
             retries_remaining = retries_remaining - 1
             time.sleep(0.5)
-        print 'Success = {0} and the number of retries remaining: {1}'.format(success, retries_remaining)
+        print('Success = {0} and the number of retries remaining: {1}'.format(success, retries_remaining))
         return success
 
     def register_etbs(self, local):
@@ -94,9 +94,9 @@ class ETBSpawner():
         server_ip = self.state.config['metaserver_name_or_ip']
         server_port = self.state.config['metaserver_listening_port']
         remote_url = 'http://{0}:{1}'.format(self.remote[1], self.remote[2])
-        print 'Linking: {0} @ {1} with {2}'.format(local, server_ip, remote_url)
-        remote_node = xmlrpclib.Server(remote_url)
-        print 'proxylink({0}, {1}, {2}, {3})'.format(server_ip, server_port, self.remote[0], local[0])
+        print('Linking: {0} @ {1} with {2}'.format(local, server_ip, remote_url))
+        remote_node = xmlrpc.client.Server(remote_url)
+        print('proxylink({0}, {1}, {2}, {3})'.format(server_ip, server_port, self.remote[0], local[0]))
         remote_node.proxylink(server_ip, server_port, self.remote[0], local[0])
         return True
 
@@ -119,15 +119,15 @@ class ETBSpawner():
 
     def link_rules(self):
         rules = self.state.config['etb_rules']
-        print '>rules = %s' % rules
+        print('>rules = %s' % rules)
         if rules and os.path.exists(rules):
             src = os.path.abspath(rules)
             self.rules = os.path.basename(rules)
             dst = os.path.join(self.directory, self.rules)
-            print 'src = %s' % src
-            print 'dst = %s' % dst
+            print('src = %s' % src)
+            print('dst = %s' % dst)
             os.symlink(src, dst)
-        print '<rules = %s' % rules
+        print('<rules = %s' % rules)
 
 
     def generate_config(self):

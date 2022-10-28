@@ -1,8 +1,10 @@
 
-from etb_manager import ETBNetwork
-from etb_tests import etb_test, ETBTest
-from etb.terms import mk_subst, mk_map, mk_stringconst, mk_idconst, mk_numberconst, mk_claim, mk_literal
 from etb.parser import parse_literal
+from etb.terms import mk_claim, mk_subst
+
+from etb_manager import ETBNetwork
+from etb_tests import ETBTest, etb_test
+
 
 class RemoteTest(ETBTest):
 

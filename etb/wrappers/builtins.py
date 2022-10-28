@@ -1,5 +1,5 @@
 """Builtin predicates"""
-from __future__ import division
+
 
 import uuid
 import time
@@ -142,7 +142,7 @@ class Builtins(Tool):
         """Runs a shell command and get the (text) result back."""
         if not cmd.is_array():
             return Failure(self)  # TODO error claims
-        cmd = list(unicode(x) for x in cmd.get_args())
+        cmd = list(str(x) for x in cmd.get_args())
         try:
             shell_res = subprocess.check_output(cmd)
             return Substitutions(self, [{result: terms.StringConst(shell_res)}])
@@ -157,7 +157,7 @@ class Builtins(Tool):
         """
         if not cmd.is_array():
             return Failure(self)  # TODO error claims
-        cmd = list(unicode(x) for x in cmd.get_args())
+        cmd = list(str(x) for x in cmd.get_args())
         try:
             shell_res = subprocess.check_output(cmd)
             return Substitutions(self, [{result: terms.StringConst(shell_res)}])
@@ -170,12 +170,12 @@ class Builtins(Tool):
     def match_facts(self, goal, facts):
         """Put in facts the sorted list of facts that match goal."""
         # get the actual list of facts (sorted)
-        print goal, facts
+        print(goal, facts)
         _, goal = goal.negative_rename()  # avoid collisions
         with self._etb.logic_state:
             found_facts = list(subst(goal) for subst in \
                                self._etb.logic_state.match_facts_against(goal))
-        print found_facts
+        print(found_facts)
         found_facts.sort()
         found_facts = terms.Array(found_facts)
         # bind/check

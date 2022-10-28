@@ -25,11 +25,10 @@ import os, sys
 sys.path.append(os.path.abspath(os.path.join(__file__, '..')))
 
 import logging
-import signal
 import time
 
-from etb import ETB, debug_level_value
-from etbconfig import ETBConfig
+from .etb import ETB, debug_level_value
+from .etbconfig import ETBConfig
 
 def setup_logger(debugLevel, logFile):
     """
@@ -99,7 +98,7 @@ def main():
         while True:
             time.sleep(5)
     except Exception as e:
-        print('Caught exception {0}'.format(e))
+        print(('Caught exception {0}'.format(e)))
 
 if __name__ == '__main__':
     main()

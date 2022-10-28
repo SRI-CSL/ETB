@@ -1,8 +1,12 @@
-import os, os.path
-import subprocess, tempfile, time
-import xmlrpclib
+import os
+import os.path
+import subprocess
+import tempfile
+import time
+import xmlrpc.client
 
 from etb.etbclientlib import ETBClient
+
 
 class ETBNode(object):
     def __init__(self, spec, setupOnly=False):
@@ -21,7 +25,7 @@ class ETBNode(object):
         for w in self._wrappers:
             src = '../etb/wrappers/' + w + '.py'
             if not os.path.exists(w + '.py') and not os.path.exists(src):
-                raise (Exception ('Invalid wrapper: %s' % w))
+                raise Exception('Invalid wrapper: %s' % w)
 
     def link_wrappers(self):
         os.mkdir(self._directory + '/wrappers')
@@ -42,7 +46,7 @@ class ETBNode(object):
                 dst = os.path.join(self._directory, os.path.basename(r))
                 os.symlink(r, dst)
             else:
-                raise (Exception ('Invalid rules file: %s' % r))
+                raise Exception('Invalid rules file: %s' % r)
             
     def generate_config(self):
         with open(self._directory + '/etb_conf.ini', 'w') as f:
@@ -58,13 +62,13 @@ class ETBNode(object):
         to make sure there's no already running node there.
         """
         try:
-            old_etb = xmlrpclib.ServerProxy('http://localhost:%d' % self._port)
+            old_etb = xmlrpc.client.ServerProxy('http://localhost:%d' % self._port)
             old_etb.test()
             fail = True
         except:
             fail = False
         if fail:
-            print 'Error: port %d is already in use, the ETB cannot be set up correctly.' % self._port
+            print('Error: port %d is already in use, the ETB cannot be set up correctly.' % self._port)
             assert False
 
     def __enter__(self):
@@ -78,10 +82,10 @@ class ETBNode(object):
         self.link_rules()
         self.generate_config()
         if self._setupOnly:
-            print 'ETB Node configured in: %s' % self._directory
+            print('ETB Node configured in: %s' % self._directory)
             return None
         self._logFile = './%s.log' % os.path.basename(self._directory)
-        print 'Logging into %s' % self._logFile
+        print('Logging into %s' % self._logFile)
         of = open(self._logFile, 'w')
         
         self.check_port()
@@ -104,7 +108,7 @@ class ETBNode(object):
 
     def dump(self):
         self._logOutput = True
-        print 'Logged into: %s' % self._logFile
+        print('Logged into: %s' % self._logFile)
 
     def __exit__(self, _, value, tb):
         if self._setupOnly:
@@ -145,7 +149,7 @@ class ETBNetwork(object):
                     self.connect(s)
                 self._nodes.append(node)
         except Exception as msg:
-            print msg
+            print(msg)
             self.hasErrors = True
         return self
 

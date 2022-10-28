@@ -24,26 +24,20 @@ defined in this module).
    <http://www.gnu.org/licenses/>.
 """
 
-# from the ETB:
-from etb import terms
-from etb import parser
-
-# the datalog stuff
-import model
-import inference
-import externals
-import graph
+# saving state
+import bz2
+# logging
+import logging
+import os.path
+import uuid
 
 # the dot generation
 import pydot
-import uuid
+# from the ETB:
+from etb import parser, terms
 
-# logging
-import logging
-
-# saving state
-import bz2
-import os.path
+# the datalog stuff
+from . import externals, graph, inference, model
 
 
 class Engine(object):
@@ -236,7 +230,7 @@ class Engine(object):
                         each element is a list of indices into claims
         Creates a results data structure in the interpret state.
         """
-        gresults = dict(zip(goals, [[claims[i] for i in gr] for gr in goal_results]))
+        gresults = dict(list(zip(goals, [[claims[i] for i in gr] for gr in goal_results])))
         self.inference_state.interpret_state.add_goal_results(dict(gresults))
         self.log.debug('add_goal_results: {0}'
                        .format(self.inference_state.interpret_state.results))
@@ -642,7 +636,7 @@ class Engine(object):
                 expl = self.term_factory.close_explanation(intexpl)
                 external_claim = terms.Claim(external_literal, expl)
                 return external_claim
-            external_claims = map(lambda claim: create_external_claim(claim), internal_claims)
+            external_claims = [create_external_claim(claim) for claim in internal_claims]
         else:
             internal_lits = {iclaim.clause[0] for iclaim in internal_claims}
             def create_external_claim(internal_claim):
@@ -671,7 +665,7 @@ class Engine(object):
             fgoal = model.freeze(internal_goal)
         annot = self.inference_state.logical_state.goal_dependencies.get_annotation(fgoal)
         if not annot:
-            print('No annotation for {0} goal {1}'.format("rename" if rename_goal else "", fgoal))
+            print(('No annotation for {0} goal {1}'.format("rename" if rename_goal else "", fgoal)))
         return annot
 
     def get_goal_annotations(self, goal_results):
@@ -698,7 +692,7 @@ class Engine(object):
         def transform_internal_rule_to_external_rule(internal):
             closed_literals = self.term_factory.close_literals(internal)
             return terms.Clause(closed_literals[0], closed_literals[1:])
-        return map(lambda rule: transform_internal_rule_to_external_rule(rule), internal_rules)
+        return [transform_internal_rule_to_external_rule(rule) for rule in internal_rules]
 
 
     def get_stuck_goals(self):
@@ -811,8 +805,7 @@ class Engine(object):
             external_claim = terms.Claim(external_literal, self.get_rule_and_facts_explanation(internal_claim, explanation))
             return external_claim
 
-        return map(lambda (claim, expl): create_external_claim(claim, expl),
-                   zip(internal_claims, explanations))
+        return [create_external_claim(claim_expl[0], claim_expl[1]) for claim_expl in zip(internal_claims, explanations)]
 
     def get_substitutions(self, goal):
         """
@@ -887,7 +880,7 @@ class Engine(object):
         if len(list_of_terms) == 1:
             return str(list_of_terms[0]) + "."
         else:
-            return str(list_of_terms[0]) +  " :- " + ",".join(map(lambda literal: str(literal), list_of_terms[1:]))
+            return str(list_of_terms[0]) +  " :- " + ",".join([str(literal) for literal in list_of_terms[1:]])
 
 
     def get_rule_and_facts_explanation(self, claim, explanation=None):
@@ -936,7 +929,7 @@ class Engine(object):
                 generate_children(explanation[1])
                 generate_children(explanation[2], explanation[3])
 
-            elif isinstance(explanation, (terms.Literal, unicode)):
+            elif isinstance(explanation, (terms.Literal, str)):
                 self.log.debug("get_rule_and_facts_explanation: claim %s has explanation %s and is TERM" % (claim, external_explanation))
                 facts.append(external_explanation)
             else:
@@ -946,11 +939,11 @@ class Engine(object):
         self.log.debug('engine.get_rule_and_facts_explanation: rule[0] = {0}, facts = {1}'
                       .format(rule[0], facts))
         if rule[0] is not None:
-            return "from rule " + rule[0] + " with facts: " + ", ".join(map(lambda literal: str(literal), facts))
+            return "from rule " + rule[0] + " with facts: " + ", ".join([str(literal) for literal in facts])
         elif len(facts) == 1:
             return str(facts[0])
         else:
-            return ", ".join(map(lambda literal: str(literal), facts))
+            return ", ".join([str(literal) for literal in facts])
 
     def to_png(self, claim, explanation=None):
         """
@@ -968,62 +961,64 @@ class Engine(object):
         created PNG file.
 
         """
-        #internal_fact = self.term_factory.mk_literal(claim.literal)
+        # internal_fact = self.term_factory.mk_literal(claim.literal)
 
         graph = pydot.Dot(graph_type='graph')
-
-        def generate_children(cl):
+        # XXX adds expl as a parameter to avoid the type error:
+        # TypeError: generate_children() takes exactly 1 argument (2 given)
+        def generate_children(cl, expl=None):
             #print("generate_children(%s)" % repr(cl))
-            if explanation is None:
-                explanation = self.inference_state.logical_state.db_get_explanation(cl)
-                assert explanation[0] != "None", 'Could not get explanation for {0}'.format(cl)
+            if expl is None:
+                expl = self.inference_state.logical_state.db_get_explanation(cl)
+                error_message = 'Could not get explanation for {0}'.format(cl)
+                assert expl[0] != "None", error_message
             else:
-                assert explanation[0] != "None"
+                assert expl[0] != "None"
             #print("explanation = %s" % repr(explanation))
-            external_explanation = self.term_factory.close_explanation(explanation)
+            external_explanation = self.term_factory.close_explanation(expl)
             #print("external_explanation = %s" % external_explanation)
             label_top_node = self.__readable_clause(self.term_factory.close_literals(cl))
             top_node = pydot.Node(str(cl),label=label_top_node)
             graph.add_node(top_node)
             #the isinstance stuff is a hack to prevent crashing
-            if  isinstance(explanation, tuple) and len(explanation) == 1: # an Axiom or External
+            if  isinstance(expl, tuple) and len(expl) == 1: # an Axiom or External
                 axiom_node = pydot.Node(str(uuid.uuid4()), label=external_explanation)
                 graph.add_node(axiom_node)
                 edge = pydot.Edge(top_node, axiom_node)
                 graph.add_edge(edge)
-            elif isinstance(explanation, tuple) and len(explanation) == 3 and explanation[0] == "ResolutionTopDown":
+            elif isinstance(expl, tuple) and len(expl) == 3 and expl[0] == "ResolutionTopDown":
                 # Note that we do not recurse through the goal node
-                goal_explanation = pydot.Node(str(explanation[2]), label=str(self.term_factory.close_literal(explanation[2])))
+                goal_explanation = pydot.Node(str(expl[2]), label=str(self.term_factory.close_literal(expl[2])))
                 goal_node_id = str(uuid.uuid4())
                 goal_node = pydot.Node(goal_node_id, label="Goal")
                 graph.add_node(goal_node)
                 graph.add_node(goal_explanation)
-                resolution_node = pydot.Node(str(uuid.uuid4()), label=explanation[0])
+                resolution_node = pydot.Node(str(uuid.uuid4()), label=expl[0])
                 graph.add_node(resolution_node)
                 edge1 = pydot.Edge(top_node, resolution_node )
-                edge2 = pydot.Edge(top_node, str(explanation[1]))
-                edge3 = pydot.Edge(top_node, str(explanation[2]))
-                edge4 = pydot.Edge(str(explanation[2]), goal_node_id)
+                edge2 = pydot.Edge(top_node, str(expl[1]))
+                edge3 = pydot.Edge(top_node, str(expl[2]))
+                edge4 = pydot.Edge(str(expl[2]), goal_node_id)
                 graph.add_edge(edge1)
                 graph.add_edge(edge2)
                 graph.add_edge(edge3)
                 graph.add_edge(edge4)
                 if explanation[1] is not None:
-                    generate_children(explanation[1])
+                    generate_children(expl[1])
 
-            elif isinstance(explanation, tuple) and len(explanation) == 4 and explanation[0] == "ResolutionBottomUp": # ResolutionBottomUp
-                node = pydot.Node(str(uuid.uuid4()), label=explanation[0])
+            elif isinstance(expl, tuple) and len(expl) == 4 and expl[0] == "ResolutionBottomUp": # ResolutionBottomUp
+                node = pydot.Node(str(uuid.uuid4()), label=expl[0])
                 graph.add_node(node)
                 edge1 = pydot.Edge(top_node, node)
-                edge2 = pydot.Edge(top_node, str(explanation[1]))
-                edge3 = pydot.Edge(top_node, str(explanation[2]))
+                edge2 = pydot.Edge(top_node, str(expl[1]))
+                edge3 = pydot.Edge(top_node, str(expl[2]))
                 graph.add_edge(edge1)
                 graph.add_edge(edge2)
                 graph.add_edge(edge3)
-                generate_children(explanation[1])
-                generate_children(explanation[2], explanation[3])
+                generate_children(expl[1])
+                generate_children(expl[2], expl[3])
 
-            elif isinstance(explanation, terms.Term):
+            elif isinstance(expl, terms.Term):
                 node = pydot.Node(str(uuid.uuid4()), label="External")
                 graph.add_node(node)
                 edge1 = pydot.Edge(top_node, node )
@@ -1031,19 +1026,20 @@ class Engine(object):
                 # only add explanation if it's actually different from the
                 # top_node's label
                 # -1 cause there is a dot to end a clause
-                if not str(explanation) == label_top_node[:-1]:
-                    edge2 = pydot.Edge(top_node, str(explanation))
+                if not str(expl) == label_top_node[:-1]:
+                    edge2 = pydot.Edge(top_node, str(expl))
                     graph.add_edge(edge2)
             else:
                # just make a string out of the explanation and show it
                 node = pydot.Node(str(uuid.uuid4()), label="Unknown")
                 graph.add_node(node)
                 edge1 = pydot.Edge(top_node, node )
-                edge2 = pydot.Edge(top_node, str(explanation))
+                edge2 = pydot.Edge(top_node, str(expl))
                 graph.add_edge(edge1)
                 graph.add_edge(edge2)
 
-        generate_children([internal_fact], explanation)
+        # generate_children([internal_fact], explanation)
+        generate_children(claim, expl=explanation)
         filename = str(uuid.uuid4()) + ".png"
         graph.write_png(filename)
         return [filename]
@@ -1169,7 +1165,7 @@ class Engine(object):
                 return
 
             subgoalindex_root = annotation_root.subgoalindex
-            claims_root = map(lambda claim: claim[0], annotation_root.claims)
+            claims_root = [claim[0] for claim in annotation_root.claims]
             status_root = annotation_root.print_status()
             goal_root = annotation_root.goal
             if goal_root:

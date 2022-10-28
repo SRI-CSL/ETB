@@ -20,10 +20,10 @@ but also which goals have been interpreted.
 """
 
 import os, threading, sys, traceback
-import terms, wrapper
+from . import terms, wrapper
 import logging, inspect
 
-from datalog import model
+from .datalog import model
 
 class InterpretState(object):
     """
@@ -127,7 +127,7 @@ class InterpretState(object):
             if goal is not None:
                 handler = self._get_handler(goal)
                 if handler is not None:
-                    cls = handler.im_class
+                    cls = handler.__self__.__class__
                     mod = cls.__module__
                     self.log.error('Goal %s is interpreted (in wrapper %s) but invalid with error: "%s"'
                                    % (goal, mod, e))
@@ -382,7 +382,7 @@ class InterpretState(object):
         """Dict of predicate name -> argspec of the predicate"""
         preds = {}
         with self:
-            for k,v in self._handlers.iteritems():
+            for k,v in self._handlers.items():
                 preds[str(k.val)] = v._argspec
         return preds
     
@@ -432,8 +432,8 @@ class InterpretState(object):
         by this component."""
         with self:
             preds = []
-            for name, handler in self._handlers.iteritems():
-                cls = handler.im_class
+            for name, handler in self._handlers.items():
+                cls = handler.__self__.__class__
                 mod = cls.__module__
                 item = '{0}({1}): {2}'.format(name, handler._argspec, mod)
                 preds.append(item)

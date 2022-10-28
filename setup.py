@@ -51,6 +51,8 @@ setup(
     "pydot2 >= 1.0.33",
     "graphviz >= 0.2.2",
     "colorama >= 0.2.7",
+    "pyreadline",
+    "Twisted",
   ],
   classifiers=[
     'Development Status :: 3 - Alpha',

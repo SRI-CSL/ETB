@@ -23,12 +23,11 @@ representation as defined by the :class:`etb.datalog.model.TermFactory`.
    <http://www.gnu.org/licenses/>.
 """
 
-import model
-import index
-import externals
+from . import model
+from . import index
 import logging
 import time
-import graph
+from . import graph
 
 class Inference(object):
 
@@ -112,7 +111,7 @@ class Inference(object):
         self.logical_state.goal_dependencies.condition.acquire()
 
     def unlock(self):
-        self.logical_state.goal_dependencies.condition.notifyAll()
+        self.logical_state.goal_dependencies.condition.notify_all()
         self.logical_state.goal_dependencies.inferencing_clear = True
         self.logical_state.goal_dependencies.condition.release()
 
@@ -284,7 +283,7 @@ class Inference(object):
             subst = model.get_unification_l(candidate[0], disjoint_goal)
             self.log.debug('inference.resolve_goal: subst {0}'
                           .format(dict([(self.term_factory.get_symbol(v),
-                                         str(self.term_factory.get_symbol(a))) for v, a in subst.items()])))
+                                         str(self.term_factory.get_symbol(a))) for v, a in list(subst.items())])))
             if model.is_substitution(subst):
                 result = True
                 pending_rule = model.apply_substitution_c(subst, candidate, self.term_factory)

@@ -1,11 +1,8 @@
 
+import os
+
 from twisted.web.resource import Resource
 from twisted.web.server import NOT_DONE_YET
-
-from utils import Utils
-
-import sqlite3, os, subprocess
-
 
 
 class Log(Resource):
@@ -21,7 +18,7 @@ class Log(Resource):
         
 
     def getChild(self, name, request):
-        print "Confirm.getChild called with name:'%s' and request: %s from host: %s" % (name, request, request.getHost())
+        print("Confirm.getChild called with name:'%s' and request: %s from host: %s" % (name, request, request.getHost()))
         return LogChild(name, self.state);
 
 
@@ -50,7 +47,7 @@ class LogChild(Resource):
     
     
     def _delayedRender(self, results):
-        print 'Rendering: %s' % results
+        print('Rendering: %s' % results)
         yada = ''
         if not results:
             yada = '<html><body>Unknown request sorry :-(</body></html>'
@@ -58,7 +55,7 @@ class LogChild(Resource):
             server_farm_path  = self.state.config['server_farm_path']
             logfile = os.path.join(server_farm_path, self.name, 'logfile.txt')
             yada = open(logfile, 'r').read()
-            print 'Opening  %s' % logfile
+            print('Opening  %s' % logfile)
 
             yada = '<html><body><pre>{0}</pre></body></html>'.format(yada) 
         self.request.write(yada)

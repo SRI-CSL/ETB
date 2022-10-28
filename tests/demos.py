@@ -24,9 +24,9 @@ class MakeTest(ETBTest):
                                            srcMain, '"main_%s"' % arch, 'Exe']))
         self.etb.etb().query_wait(q)
         r = self.etb.etb().query_answers(q)
-        print '\nr = {0}: {1}\n'.format(r, type(r))
+        print('\nr = {0}: {1}\n'.format(r, type(r)))
         r = etb.terms.loads(r)[0]['Exe']
-        print '\nr = {0}: {1}\n'.format(r, type(r))
+        print('\nr = {0}: {1}\n'.format(r, type(r)))
         self.etb.get_file(r, "main_%s" % arch)
         return ('true', True)
 
@@ -49,7 +49,7 @@ class AllSATLive(ETBTest):
         q = self.etb.etb().query('allsat(%s, Answers)' % f)
         self.etb.etb().query_wait(q)
         result = self.etb.etb().query_answers(q)
-        print 'result = {0}: {1}'.format(result, type(result))
+        print('result = {0}: {1}'.format(result, type(result)))
         return (result,
                 ["{\"__Subst\": [[{\"__Var\": \"Answers\"}, [\"(and (= a false)(= c false)(= b false))\", \"(and (= a false)(= c true)(= b false))\", \"(and (= a false)(= c true)(= b true))\", \"(and (= a true)(= c true)(= b true))\"]]]}"])
     

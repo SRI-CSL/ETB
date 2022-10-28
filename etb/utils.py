@@ -21,7 +21,7 @@ import copy
 import threading
 import traceback
 import weakref
-from Queue import Queue, Empty
+from queue import Queue, Empty
 
 def flatten(l, ltypes=(list, tuple)):
     ltype = type(l)

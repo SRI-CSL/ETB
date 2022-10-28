@@ -25,15 +25,13 @@ python -m doctest -v terms.py
    <http://www.gnu.org/licenses/>.
 """
 
-from __future__ import unicode_literals
-
-import sys
-import re
-import weakref
 import collections
-import itertools
 import json
-import parser
+import re
+import sys
+import weakref
+
+from . import parser
 
 # ----------------------------------------------------------------------
 # terms
@@ -196,7 +194,7 @@ def get_fileref(term):
         sha1term = mk_stringconst('sha1')
         filestr = term.get_args()[fileterm].val
         sha1 = term.get_args()[sha1term].val
-        fref = { 'file'.encode('utf8') : filestr, 'sha1'.encode('utf8') : sha1 }
+        fref = { 'file'.encode('utf-8') : filestr, 'sha1'.encode('utf-8') : sha1 }
         return fref
     else:
         return None
@@ -227,14 +225,14 @@ def mk_term(obj):
     if isinstance(obj, Term):
         return obj
     elif isinstance(obj, (list, tuple)):
-        return mk_array(map(lambda x: mk_term(x), obj))
+        return mk_array([mk_term(x) for x in obj])
     elif isinstance(obj, dict):
-        return mk_map(map(lambda (x, y): (mk_stringconst(x), mk_term(y)), obj.iteritems()))
+        return mk_map([(mk_stringconst(x_y[0]), mk_term(x_y[1])) for x_y in iter(obj.items())])
     elif isinstance(obj, bool):
         return mk_boolconst(obj)
     elif isinstance(obj, (int, float)):
         return mk_numberconst(obj)
-    elif isinstance(obj, basestring):
+    elif isinstance(obj, str):
         if obj == '':
             return mk_stringconst(obj)
         try:
@@ -290,7 +288,7 @@ class Term(object):
         self._normal_form = None
         self._volatile = False
         
-    def __nonzero__(self):
+    def __bool__(self):
         """
         Checks if term is nonzero, e.g., empty Array or Map, nonzero NumberConst
         """
@@ -343,7 +341,7 @@ class Term(object):
         """
         Iterate through all current terms.
         """
-        for t in Term.__terms.itervalues():
+        for t in Term.__terms.values():
             yield t
 
     def unify(self, other):
@@ -393,14 +391,14 @@ class Term(object):
             #         stack.append( (l, r) )
             elif left.is_array() and right.is_array() and \
                     len(left.elems) == len(right.elems):
-                for l, r in itertools.izip(left.elems, right.elems):
+                for l, r in zip(left.elems, right.elems):
                     stack.append( (l, r) )
             elif left.is_map() and right.is_map():
                 # most interesting case: unify keys pairwise
                 # only ground keys are authorized.
-                if not left.items.viewkeys() == right.items.viewkeys():
+                if not left.items.keys() == right.items.keys():
                     return None
-                for k, v in left.items.iteritems():
+                for k, v in left.items.items():
                     assert k.is_ground(), 'k is not ground; unify unhappy'
                     stack.append( (v, right.items[k]) )
             else:
@@ -496,7 +494,7 @@ class Term(object):
             for t in self.elems:
                 t._compute_free_vars(vars)
         elif self.is_map():
-            for k, v in self.items.iteritems():
+            for k, v in self.items.items():
                 k._compute_free_vars(vars)
                 v._compute_free_vars(vars)
 
@@ -553,7 +551,7 @@ class Term(object):
             for t in self.elems:
                 t.ordered_free_vars(l)
         elif self.is_map():
-            for k, v in self.items.iteritems():
+            for k, v in self.items.items():
                 k.ordered_free_vars(l)
                 v.ordered_free_vars(l)
         return l
@@ -596,7 +594,7 @@ class Const(Term):
     def to_python(self):
         '''Convert ground terms to python'''
         return self.val
-    def __nonzero__(self):
+    def __bool__(self):
         return bool(self.val)
     def get_val(self):
         return self.val
@@ -611,7 +609,7 @@ class IdConst(Const):
         """
         Initialize an IdConst with idstr
         """
-        if not isinstance(idstr, basestring):
+        if not isinstance(idstr, str):
             raise ValueError('IdConst: string expected for {0} of type {1}'
                              .format(idstr, type(idstr)))
         if idstr[0].isupper():
@@ -621,11 +619,11 @@ class IdConst(Const):
             raise ValueError('IdConst: {0} must not start with a digit'
                              .format(idstr))
         Term.__init__(self)
-        self.val = idstr.encode('utf8')
+        self.val = idstr.encode('utf-8')
     def __eq__(self, other):
         if isinstance(other, IdConst):
             return hash(self) == hash(other) and self.val == other.val
-        elif isinstance(other, basestring):
+        elif isinstance(other, str):
             return self.val == other
         else:
             return False
@@ -635,7 +633,7 @@ class IdConst(Const):
         else:
             return not (isinstance(other, Var) or isinstance(other, NumberConst))
     def __repr__(self):
-        return '{0}'.format(self.val.encode('utf8'))
+        return '{0}'.format(self.val.decode('utf-8'))
     def __hash__(self):
         self._hash = hash(self.val)
         return self._hash
@@ -645,14 +643,14 @@ class IdConst(Const):
 class StringConst(Const):
     """String consts"""
     def __init__(self, text):
-        if text == u"dummy":
+        if text == "dummy":
             raise ValueError(text)
         Term.__init__(self)
-        self.val = text.encode('utf8')
+        self.val = text.encode('utf-8')
     def __eq__(self, other):
         if isinstance(other, StringConst):
             return hash(self) == hash(other) and self.val == other.val
-        elif isinstance(other, basestring):
+        elif isinstance(other, str):
             return self.val == other
         else:
             return False
@@ -662,7 +660,7 @@ class StringConst(Const):
         else:
             return isinstance(other, Array) or isinstance(other, Map)
     def __repr__(self):
-        return '"{0}"'.format(self.val.encode('utf8'))
+        return '"{0}"'.format(self.val.decode('utf-8'))
     def __hash__(self):
         self._hash = hash(self.val)
         return self._hash
@@ -673,7 +671,7 @@ class BoolConst(Const):
     """Boolean Consts"""
     def __init__(self, val):
         Term.__init__(self)
-        if isinstance(val, basestring):
+        if isinstance(val, str):
             if val == 'true':
                 val = True
             elif val == 'false':
@@ -706,7 +704,7 @@ class NumberConst(Const):
         if isinstance(val, int) or isinstance(val, float):
             self.val = str(val)
             self.num = val
-        elif isinstance(val, basestring):
+        elif isinstance(val, str):
             self.val = val
             if any(i in '\.eE' for i in val):
                 self.num = float(val)
@@ -740,7 +738,7 @@ class Var(Term):
     """
     def __init__(self, val):
         Term.__init__(self)
-        assert isinstance(val, (basestring, int)),\
+        assert isinstance(val, (str, int)),\
             'Var must be a string or int: {0}: {1}'.format(val, type(val))
         self.val = val
     def __eq__(self, other):
@@ -764,12 +762,12 @@ class Var(Term):
         self._hash = hash(self.val)
         return self._hash
     def __repr__(self):
-        return "X%d" % self.val if isinstance(self.val, int) else unicode(self.val)
+        return "X%d" % self.val if isinstance(self.val, int) else str(self.val)
     def to_python(self):
         '''Convert ground terms to python'''
         return self.val
     def to_dot(self):
-        return "X%d" % self.val if isinstance(self.val, int) else unicode(self.val)
+        return "X%d" % self.val if isinstance(self.val, int) else str(self.val)
     def get_val(self):
         return self.val
 
@@ -808,7 +806,7 @@ class Array(Term):
         return [a.to_python() for a in self.elems]
     def to_dot(self):
         return "[%s]" % ', '.join(a.to_dot() for a in self.elems)
-    def __nonzero__(self):
+    def __bool__(self):
         return bool(self.elems)
     def get_args(self):
         return self.elems
@@ -842,19 +840,19 @@ class Map(Term):
             raise TypeError('terms.Map needs a dict, tuple, or list, given {0} of type {1}'
                             .format(items, type(items)))
         if isinstance(items, dict):
-            litems = items.items()
+            litems = list(items.items())
         else:
             if not all(isinstance(x, (tuple, list)) and len(x) == 2 for x in items):
                 raise TypeError('terms.Map items must be lists or tuples of length 2, given {0}'
                                 .format(items))
             litems = items
-        if not all(isinstance(k, (Const, basestring)) and isinstance(v, (Term, basestring))
+        if not all(isinstance(k, (Const, str)) and isinstance(v, (Term, str))
                    for k, v in litems):
             raise TypeError('terms.Map: items {0} should be a list of (Const, Term) tuples'
                             .format(items))
-        sitems = [(mk_stringconst(k.val.encode('utf8') if isinstance(k, Const) else k.encode('utf8')),
-                   mk_stringconst(v if isinstance(v, basestring) else v.val) \
-                   if isinstance(v, (basestring, Const)) else v)
+        sitems = [(mk_stringconst(k.val.encode('utf-8') if isinstance(k, Const) else k.encode('utf-8')),
+                   mk_stringconst(v if isinstance(v, str) else v.val) \
+                   if isinstance(v, (str, Const)) else v)
                   for k, v in litems]
         Term.__init__(self)
         # Only allow stringconst keys; easier to ensure equality
@@ -867,7 +865,7 @@ class Map(Term):
         return (isinstance(other, Map)
                 and self.items < other.items)
     def __hash__(self):
-        self._hash = hash(tuple(self.items.iteritems()))
+        self._hash = hash(tuple(self.items.items()))
         return self._hash
     def __repr__(self):
         return "{" + ", ".join('%r: %r' % (key, self.items[key]) for key in sorted(self.items)) + "}"
@@ -880,24 +878,24 @@ class Map(Term):
     #     else:
     #         return "{" + ", ".join('%s: %s' % (key, self.items[key]) for key in sorted(self.items)) + "}"
     def __getitem__(self, key):
-        if isinstance(key, basestring):
+        if isinstance(key, str):
             key = mk_stringconst(key)
         if key in self.items:
             return self.items[key]
     def __contains__(self, key):
-        if isinstance(key, basestring):
+        if isinstance(key, str):
             key = mk_stringconst(key)
         return key in self.items
     def to_python(self):
         '''Convert ground terms to python'''
         return dict([(k.to_python(), v.to_python())
-                     for k, v in self.items.iteritems()])
+                     for k, v in self.items.items()])
     def to_dot(self):
         if mk_stringconst('file') in self.items:
             return str(self.items[mk_stringconst('file')])
         return "[%s]" % ', '.join(
-            '%s: %s' % (k, v) for k, v in self.items.iteritems())
-    def __nonzero__(self):
+            '%s: %s' % (k, v) for k, v in self.items.items())
+    def __bool__(self):
         return bool(self.items)
     def get_args(self):
         return self.items
@@ -909,7 +907,7 @@ class Map(Term):
             raise ValueError('Illegal access: {0}: {1} should be a list'
                              .format(access, type(access)))
         if access:
-            if isinstance(access[0], basestring):
+            if isinstance(access[0], str):
                 key = mk_stringconst(access[0])
             elif isinstance(access[0], StringConst):
                 key = access[0]
@@ -947,9 +945,9 @@ class Literal(object):
         - `pred`: an instance of :class:`IdConst` or :class:`StringConst`
         - `args`: a list or tuple of :class:`Terms`
         """
-        assert isinstance(pred, (IdConst, StringConst, basestring)),\
+        assert isinstance(pred, (IdConst, StringConst, str)),\
             'mk_literal: pred must be an id or string'
-        if isinstance(pred, basestring):
+        if isinstance(pred, str):
             if id_match(pred):
                 if pred[0].isupper():
                     raise ValueError('Literal predicate ids must start with lower case: {0}'
@@ -976,7 +974,7 @@ class Literal(object):
         """Arbitrary order (with hash...)"""
         # TODO a better (total?) ordering
         return self != other and hash(self) < hash(other)
-    def __nonzero__(self):
+    def __bool__(self):
         return False
     def __repr__(self):
         if self.args:
@@ -1097,11 +1095,11 @@ class Clause(object):
         # bound in the body
         if not temp:
             if not (head.free_vars() <= self._free_vars):
-                print >>sys.stderr, head
+                print(head, file=sys.stderr)
                 for b in body:
-                    print >>sys.stderr, b
-                print >>sys.stderr, head.free_vars()
-                print >>sys.stderr, self._free_vars
+                    print(b, file=sys.stderr)
+                print(head.free_vars(), file=sys.stderr)
+                print(self._free_vars, file=sys.stderr)
                 assert False, 'datalog restriction fails! Clause __init__ unhappy'
         self._is_ground = head.is_ground() and all(x.is_ground() for x in body)
         self._done = True  # freeze
@@ -1240,7 +1238,7 @@ class Claim(object):
         return self != other and self.literal < other.literal
 
     def __repr__(self):
-        if isinstance(self.reason, basestring):
+        if isinstance(self.reason, str):
             reason = '"' + self.reason + '"'
         else:
             reason = self.reason
@@ -1304,7 +1302,7 @@ def mk_subst(**bindings):
     >>> mk_subst(X=mk_numberconst(42), Y=mk_array([mk_numberconst(1),mk_numberconst(2),mk_numberconst(3)]))
     subst(X = 42, Y = [1, 2, 3])
     """
-    term_bindings = dict((mk_var(k), v) for k, v in bindings.iteritems())
+    term_bindings = dict((mk_var(k), v) for k, v in bindings.items())
     return Subst(term_bindings)
 
 class Subst(object):
@@ -1338,7 +1336,7 @@ class Subst(object):
         self._introduced = set()  # set of introduced variables
         if bindings is not None:
             if isinstance(bindings, dict):
-                for k, v in bindings.iteritems():
+                for k, v in bindings.items():
                     self.bind(k, v)
             elif isinstance(bindings, list) or isinstance(bindings, tuple):
                 for k, v in bindings:
@@ -1368,7 +1366,7 @@ class Subst(object):
 
     def __getitem__(self, t):
         """Apply a substitution to a term"""
-        if isinstance(t, basestring):
+        if isinstance(t, str):
             t = mk_var(t)
         return self.__call__(t)
 
@@ -1396,7 +1394,7 @@ class Subst(object):
             if t.is_ground():
                 return t
             elif t.is_var():
-                for i in xrange(len(self._bindings)):
+                for i in range(len(self._bindings)):
                     if self._bindings[i][0] == t:
                         return self._bindings[i][1]
                 return t
@@ -1405,22 +1403,22 @@ class Subst(object):
             # elif t.is_apply():
             #     return mk_apply(self(t.val), map(self, t.args))
             elif t.is_array():
-                return mk_array(map(self, t.elems))
+                return mk_array(list(map(self, t.elems)))
             elif t.is_map():
                 return mk_map(dict((self(k), self(v)) for k, v in \
-                              t.items.iteritems()))
+                              t.items.items()))
             else:
                 assert False, 'unknown kind of term in __call__'
         elif isinstance(t, Literal):
-            return t.__class__(self(t.pred), map(self, t.args))
+            return t.__class__(self(t.pred), list(map(self, t.args)))
         elif isinstance(t, Clause):
-            return t.__class__(self(t.head), map(self, t.body))
+            return t.__class__(self(t.head), list(map(self, t.body)))
         else:
-            print t.__class__
-            print t
+            print(t.__class__)
+            print(t)
             assert False, 'bad arg %s of class %s; __call__ unhappy' % (t, t.__class__)
         
-    def __nonzero__(self):
+    def __bool__(self):
         """A substitution, even empty, is to be considered as a true value"""
         return True
 
@@ -1594,7 +1592,7 @@ class TermJSONEncoder(json.JSONEncoder):
             elif o.is_array():
                 return { '__Array': list(o.get_args()) }
             elif o.is_map():
-                return { '__Map': dict((k.val, v) for k, v in o.get_args().iteritems()) }
+                return { '__Map': dict((k.val, v) for k, v in o.get_args().items()) }
         elif isinstance(o, Literal):
             return {'__Literal': [o.pred] + list(o.args)}
         elif isinstance(o, Clause):
@@ -1604,7 +1602,7 @@ class TermJSONEncoder(json.JSONEncoder):
         elif isinstance(o, Claim):
             return {'__Claim': o.literal,
                     '__Reason': o.reason }
-        print 'Should have to_json defined for {0}'.format(o.__class__)
+        print('Should have to_json defined for {0}'.format(o.__class__))
         return json.JSONEncoder.default(self, o)  # defer to default
 
 class TermReadableJSONEncoder(json.JSONEncoder):
@@ -1623,7 +1621,7 @@ class TermReadableJSONEncoder(json.JSONEncoder):
             elif o.is_array():
                 return list(o.get_args())
             elif o.is_map():
-                return dict((repr(k), v) for k, v in o.get_args().iteritems())
+                return dict((repr(k), v) for k, v in o.get_args().items())
         elif isinstance(o, Literal):
             return {'pred': o.pred, 'args': list(o.args)}
         elif isinstance(o, Clause):
@@ -1661,7 +1659,7 @@ def term_object_hook(o):
         return Array(l)
     elif '__Map' in o:
         l = o['__Map']
-        return Map(dict([(mk_stringconst(k), v) for k, v in l.iteritems()]))
+        return Map(dict([(mk_stringconst(k), v) for k, v in l.items()]))
     elif '__Clause' in o:
         l = o['__Clause']
         assert len(l) >= 1
@@ -1688,10 +1686,10 @@ def remove_unicode(input):
     which are difficult to work with.  This function rebuilds the structures as
     plain utf8 strings"""
     if isinstance(input, dict):
-        return {remove_unicode(key): remove_unicode(value) for key, value in input.iteritems()}
+        return {remove_unicode(key): remove_unicode(value) for key, value in input.items()}
     elif isinstance(input, list):
         return [remove_unicode(element) for element in input]
-    elif isinstance(input, unicode):
+    elif isinstance(input, str):
         return input.encode('utf-8')
     else:
         return input

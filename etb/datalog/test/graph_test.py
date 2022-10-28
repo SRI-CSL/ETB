@@ -1,8 +1,8 @@
-from .. import graph
-from .. import model
-from .. import engine
+
 import unittest
-import os
+
+from etb.datalog import engine, graph, model
+
 
 class TestGraph(unittest.TestCase):
         

@@ -19,11 +19,15 @@ It is used by both the ETB daemon :mod:`etb.etbd` and the ETB shell :mod:`etb.et
 """
 
 
-import os, sys, platform
 import argparse
-import ConfigParser
+import configparser
+import os
+import platform
+import sys
+
 import colorama
-from colorama import Fore, Back, Style
+from colorama import Back, Fore, Style
+
 colorama.init()
 
 class ETBConfig:
@@ -64,10 +68,10 @@ class ETBConfig:
         self.config_file = ETBConfig.DEFAULT_CONFIG_FILE
     else:
       if not os.path.exists(self.config_file):
-        print 'Config file {0} does not exist'.format(self.config_file)
+        print('Config file {0} does not exist'.format(self.config_file))
         sys.exit(1)
 
-    cp = ConfigParser.RawConfigParser()
+    cp = configparser.RawConfigParser()
     user_config_file = os.path.expanduser("~/etb_conf.ini")
     if os.path.exists(user_config_file):
       if self.config_file:
@@ -79,7 +83,7 @@ class ETBConfig:
         cp.read([self.config_file])
         
     if cp.has_section('etb'):
-      config = {k: os.path.expandvars(v) for k, v in dict(cp.items('etb')).iteritems()}
+      config = {k: os.path.expandvars(v) for k, v in dict(cp.items('etb')).items()}
     else:
       config = {}
 
@@ -154,18 +158,18 @@ class ETBSHConfig:
       self.config_file = ETBConfig.DEFAULT_CONFIG_FILE
     else:
       if not os.path.exists(self.config_file):
-        print 'Config file {0} does not exist'.format(self.config_file)
+        print('Config file {0} does not exist'.format(self.config_file))
         sys.exit(1)
     user_config_file = os.path.expanduser('~/' + ETBConfig.DEFAULT_CONFIG_FILE)
-    cp = ConfigParser.RawConfigParser()
+    cp = configparser.RawConfigParser()
     cp.read([user_config_file, self.config_file])
     if cp.has_section('etb'):
-      etbitems = dict(cp.items('etb')).iteritems()
+      etbitems = iter(dict(cp.items('etb')).items())
       config = {k: os.path.expandvars(v) for k, v in etbitems}
     else:
       config = {}
     if cp.has_section('etbsh'):
-      etbshitems = dict(cp.items('etbsh')).iteritems()
+      etbshitems = iter(dict(cp.items('etbsh')).items())
       config.update({k: os.path.expandvars(v) for k, v in etbshitems})
     # Now get the colorbg, to set the defaults for other colors
     cbgparser = argparse.ArgumentParser(parents=[confparser], add_help=False)
@@ -303,7 +307,7 @@ class ETBSHConfig:
       ETBSHConfig.DEFAULT_WARNING_COLOR = Style.DIM + Fore.RED
       ETBSHConfig.DEFAULT_ERROR_COLOR   = Style.BRIGHT + Fore.RED
     elif bg != 'none':
-      print '-cbg should be set to one of light, dark, or none - none assumed'
+      print('-cbg should be set to one of light, dark, or none - none assumed')
 
 def color_help_default(colorstr):
   return '(default {0}, giving {1})'.format(colorstr.encode('string_escape'),

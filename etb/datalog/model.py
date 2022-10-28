@@ -21,13 +21,13 @@ Datalog engine.
    <http://www.gnu.org/licenses/>.
 """
 
-import index
-import graph
+from . import index
+from . import graph
 #from .. import terms
 from etb import terms
-from collections import deque
 import threading
 import logging
+from functools import reduce
 
 
 
@@ -61,8 +61,8 @@ class TermFactory(object):
         self.log = logging.getLogger('etb.datalog.termfactory')
 
     def show_index(self):
-        print "s to i", self.__s_to_i
-        print "i to s", self.__i_to_s
+        print("s to i", self.__s_to_i)
+        print("i to s", self.__i_to_s)
 
     def clear(self):
         """
@@ -130,7 +130,7 @@ class TermFactory(object):
         :returntype:
             - a positive integer
         """
-        if not self.__s_to_i.has_key(symbol):
+        if symbol not in self.__s_to_i:
             self.__s_to_i[symbol] = self.__const_count
             self.__i_to_s[self.__const_count] = symbol
             self.__const_count += 1
@@ -148,7 +148,7 @@ class TermFactory(object):
         :returntype:
             - a negative integer
         """
-        if not self.__s_to_i.has_key(symbol):
+        if symbol not in self.__s_to_i:
             self.__s_to_i[symbol] = self.__var_count
             self.__i_to_s[self.__var_count] = symbol
             self.__var_count -= 1
@@ -306,7 +306,7 @@ class TermFactory(object):
         :returntype:
             a list of :class:`etb.terms.Term` instances
         """
-        return map(lambda literal: self.close_literal(literal), internal_literals)
+        return [self.close_literal(literal) for literal in internal_literals]
 
     def readable_clause(self, internal_literals):
         """
@@ -330,7 +330,7 @@ class TermFactory(object):
         if len(list_of_terms) == 1:
             return str(list_of_terms[0]) + "."
         else:
-            return str(list_of_terms[0]) +  " :- " + ",".join(map(lambda literal: str(literal), list_of_terms[1:]))
+            return str(list_of_terms[0]) +  " :- " + ",".join([str(literal) for literal in list_of_terms[1:]])
 
     def close_explanation(self, internal_explanation):
         """
@@ -347,7 +347,7 @@ class TermFactory(object):
         :returntype:
             a string
         """
-        if isinstance(internal_explanation, basestring):
+        if isinstance(internal_explanation, str):
             return internal_explanation
         elif isinstance(internal_explanation, (terms.Term, terms.Literal)):
             return internal_explanation
@@ -412,7 +412,7 @@ def is_ground(literal):
     :returntype:
         `True` or `False`
     """
-    return all( map(lambda x: x > 0, literal) )
+    return all( [x > 0 for x in literal] )
 
 
 def offset(clause):
@@ -703,7 +703,7 @@ def create_resolution_bottom_up_explanation(from_clause, from_claim, claim_expl)
     assert isinstance(from_clause, graph.PendingRule), 'from_clause {0}: {1}'.format(from_clause, type(from_clause))
     assert is_internal_clause(from_claim), 'from_claim {0}: {1}'.format(from_claim, type(from_claim))
     assert isinstance(claim_expl, tuple), 'bad claim_expl: {0}'.format(claim_expl)
-    assert isinstance(claim_expl[0], basestring), 'bad claim_expl: {0}'.format(claim_expl)
+    assert isinstance(claim_expl[0], str), 'bad claim_expl: {0}'.format(claim_expl)
     assert claim_expl[0] != "None", 'bad claim_expl: {0}'.format(claim_expl)
                                                                                                      
     # engine.get_rule_and_facts_explanation calls generate_children recursively on
@@ -1340,7 +1340,7 @@ class LogicalState(object):
             a list of :class:`etb.terms.Term` instances
 
         """
-        return map(lambda claim: termfactory.close_literal(claim[0]), self.db_get_all_claims())
+        return [termfactory.close_literal(claim[0]) for claim in self.db_get_all_claims()]
 
     def db_get_goals_index(self):
         """

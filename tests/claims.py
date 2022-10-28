@@ -1,14 +1,16 @@
 
+from etb.terms import mk_claim, mk_idconst, mk_literal, mk_stringconst
+
 from etb_manager import ETBNetwork
-from etb_tests import etb_test, ETBTest
-from etb.terms import mk_subst, mk_map, mk_stringconst, mk_literal, mk_idconst, mk_claim
+from etb_tests import ETBTest, etb_test
+
 
 class ClaimTest(ETBTest):
 
     @etb_test
     def tool_error(self):
         q = self.etb.etb().query('bad_predicate(2,3)')
-        print 'tool_error: q = {0}'.format(q)
+        print('tool_error: q = {0}'.format(q))
         self.etb.etb().query_wait(q)
         return(self.etb.all_claims(),
                [mk_claim(mk_literal(mk_idconst('error'),

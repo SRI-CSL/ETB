@@ -15,32 +15,32 @@
    <http://www.gnu.org/licenses/>.
 """
 
-from __future__ import unicode_literals
+
 
 import socket
-import SocketServer
-import SimpleXMLRPCServer
+import socketserver
+import xmlrpc.server
 import base64
 import os
 import logging
 import threading
 import time
 import uuid
-import xmlrpclib
+import xmlrpc.client
 import weakref
 import codecs, base64
 import re
 from functools import wraps
 import traceback
 
-import terms
-import parser
+from . import terms
+from . import parser
 
 # frequency (in seconds) of 'ping' messages (iam: currently also the period of poke messages)
-# PING_FREQUENCY = 25   # set in etbconf.py
+PING_FREQUENCY = 25   # set in etbconf.py
 
 # a node becomes invalid after a certain number of failed 'ping'; ditto with links
-# NODE_TIMEOUT = 20 * PING_FREQUENCY
+NODE_TIMEOUT = 20 * PING_FREQUENCY
 
 def fetch_neighbors(etb):
     """
@@ -211,7 +211,7 @@ class ETBNode(object):
                     uri = "http://{host}:{port}" . format(host=host, port=self.port)
                 else:
                     uri = "http://{host}:{port}/{name}" . format(host=host, port=self.port, name=self.remote_name)
-                proxy = xmlrpclib.ServerProxy(uri)
+                proxy = xmlrpc.client.ServerProxy(uri)
                 proxy.test()
                 if proxy.get_id() == self.id:
                     retval = proxy
@@ -232,11 +232,11 @@ class ETBNode(object):
         return retval 
 
 
-class WithIpHandler(SimpleXMLRPCServer.SimpleXMLRPCRequestHandler):
+class WithIpHandler(xmlrpc.server.SimpleXMLRPCRequestHandler):
     """Handler that put the incoming IP in the thread local storage"""
     def __init__(self, request, client_address, server):
         threading.current_thread().ip = client_address[0]
-        SimpleXMLRPCServer.SimpleXMLRPCRequestHandler.__init__(
+        xmlrpc.server.SimpleXMLRPCRequestHandler.__init__(
             self, request, client_address, server)
 
 # def _export(method):
@@ -256,8 +256,8 @@ def _export(method):
             raise
     return _method
 
-class Networking(SocketServer.ThreadingMixIn,
-                 SimpleXMLRPCServer.SimpleXMLRPCServer):
+class Networking(socketserver.ThreadingMixIn,
+                 xmlrpc.server.SimpleXMLRPCServer):
     """
     XMLRPC server part of the ETB. This component is responsible for
     managing connexions with peers, and exposing an RPC interface.
@@ -276,7 +276,7 @@ class Networking(SocketServer.ThreadingMixIn,
         self._rlock = threading.RLock()
 
         try:
-            SimpleXMLRPCServer.SimpleXMLRPCServer.__init__(
+            xmlrpc.server.SimpleXMLRPCServer.__init__(
                 self, ("", self.port),
                 requestHandler=WithIpHandler, logRequests=False)
         except socket.error as e:
@@ -316,7 +316,7 @@ class Networking(SocketServer.ThreadingMixIn,
     @property
     def public_functions(self):
         """List of public functions, exposed on the network via XML-RPC"""
-        all_methods = self.__class__.__dict__.values()
+        all_methods = list(self.__class__.__dict__.values())
         return [ getattr(self,m.__name__)
                  for m in all_methods if getattr(m,'_etb_export', False) ]
 
@@ -362,7 +362,7 @@ class Networking(SocketServer.ThreadingMixIn,
         (based on the predicate symbol)
         """
         with self._rlock:
-            neighbors = self._neighbors.values()
+            neighbors = list(self._neighbors.values())
         return [n for n in neighbors if str(pred.val) in n.predicates]
 
     def load_of(self, id):
@@ -515,7 +515,7 @@ class Networking(SocketServer.ThreadingMixIn,
         self.log.debug("Trying to connect to %s:%s", host, port)
         def task(etb, host=host, port=port):
             url = "http://{0}:{1}".format(host, port)
-            proxy = xmlrpclib.ServerProxy(url)
+            proxy = xmlrpc.client.ServerProxy(url)
             try:
                 nid = proxy.get_id()
                 proxy.ping(etb.id, self.port, nid)
@@ -537,7 +537,7 @@ class Networking(SocketServer.ThreadingMixIn,
         def task(etb, proxy_host=proxy_host, proxy_port=proxy_port, local_name=local_name, remote_name=remote_name):
             self.log.debug('Proxying:  %s:%s   %s <--> %s' % (proxy_host, proxy_port, local_name, remote_name))
             url = "http://{0}:{1}/{2}".format(proxy_host, proxy_port, remote_name)
-            proxy = xmlrpclib.ServerProxy(url)
+            proxy = xmlrpc.client.ServerProxy(url)
             try:
                 nid = proxy.get_id()
                 predicates = self.link_predicates()
@@ -571,7 +571,7 @@ class Networking(SocketServer.ThreadingMixIn,
         def task(etb, local_port=local_port, remote_port = remote_port):
              self.log.debug('Tunneling: %s <===> %s' % (local_port, remote_port))
              url = "http://localhost:{0}".format(local_port)
-             proxy = xmlrpclib.ServerProxy(url)
+             proxy = xmlrpc.client.ServerProxy(url)
              try:
                  nid = proxy.get_id()
                  predicates = self.link_predicates()
@@ -611,7 +611,7 @@ class Networking(SocketServer.ThreadingMixIn,
         symbol)
         """
         with self._rlock:
-            links = self._links.values()
+            links = list(self._links.values())
         return [n for n in links if str(pred.val) in n.predicates]
 
     ##### ETB node-to-node communication
@@ -934,7 +934,7 @@ class Networking(SocketServer.ThreadingMixIn,
         """
         goals = self.etb.get_query(qid)
         if not goals:
-            print('Invalid query id: {0}'.format(qid))
+            print(('Invalid query id: {0}'.format(qid)))
             return []
         answers = []
         for goal in goals:
@@ -959,7 +959,7 @@ class Networking(SocketServer.ThreadingMixIn,
     @_export
     def get_interpreted_predicates(self) :
         """Get the list of interpreted predicates on this node"""
-        return self.wrappers.keys()
+        return list(self.wrappers.keys())
 
     @_export
     def get_all_interpreted_predicates(self) :
@@ -1019,7 +1019,7 @@ class Networking(SocketServer.ThreadingMixIn,
             q.to_dot(filename.strip('"').strip('\''))
             return True
         else:
-            self.log.error('Query id {0} not known'.format(qid))
+            self.log.error('Query id {0} not known'.format(query))
             return False
 
     @_export
@@ -1183,7 +1183,7 @@ class Networking(SocketServer.ThreadingMixIn,
                             elif g[0] == '?':
                                 notingit.append(f)
                             else:
-                                raise 'Invalid status'
+                                raise Exception('Invalid status')
                             break
             return (directories, uptodate, outdated, notingit)
         else:

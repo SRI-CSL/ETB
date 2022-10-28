@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import os, argparse, ConfigParser, socket
+import os, argparse, configparser, socket
 
 class MetaServerConfig():
 
@@ -27,7 +27,7 @@ class MetaServerConfig():
 
     def config_file_reader(self):
         if self.config_file and os.path.exists(self.config_file):
-            cp = ConfigParser.ConfigParser()
+            cp = configparser.ConfigParser()
             cp.read(self.config_file)
             assert cp.has_section('etb_metaserver')
             self.config = dict(cp.items('etb_metaserver'))

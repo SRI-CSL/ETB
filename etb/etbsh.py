@@ -22,30 +22,32 @@ It is normally invoked with ``etbsh --etb``.
    <http://www.gnu.org/licenses/>.
 """
 
-import os, shutil, sys, signal, platform, traceback
-import json
-import subprocess
+import fcntl
+import os
+import platform
 import pprint
 import re
-import xmlrpclib
 import readline
-import fcntl
-import termios
+import shutil
 import struct
-import time
-from string import Template
-from functools import wraps
+import subprocess
+import sys
+import termios
 import threading
+import time
+import traceback
+import xmlrpc.client
+from string import Template
+
 import colorama
-from colorama import Fore, Back, Style
+from colorama import Style
 
 colorama.init()
 sys.path.append(os.path.abspath(os.path.join(__file__, '..')))
 
-import terms
-import parser
-from etbconfig import ETBSHConfig, ETBConfig
-from etbclientlib import ETBClient, ETBCmdLineClient
+from . import parser, terms
+from .etbclientlib import ETBClient, ETBCmdLineClient
+from .etbconfig import ETBSHConfig
 
 # def print_star_args(*args):
 #     for count, thing in enumerate(args):
@@ -72,6 +74,26 @@ from etbclientlib import ETBClient, ETBCmdLineClient
 #         '''Check whether there is no more content to expect.'''
 #         return not self.is_alive() and self._queue.empty()
 
+# XXX adding a missing class
+# from https://github.com/google/grumpy/blob/master/third_party/stdlib/string.py#L87
+class _multimap(object):
+    """Helper class for combining multiple mappings.
+    Used by .{safe_,}substitute() to combine the mapping and keyword
+    arguments.
+    """
+    def __init__(self, primary, secondary):
+        self._primary = primary
+        self._secondary = secondary
+
+    def __getitem__(self, key):
+        try:
+            return self._primary[key]
+        except KeyError:
+            return self._secondary[key]
+
+
+
+
 class ETBShTemplate(Template):
     """ Subclass of string.Template that allows identifiers of form `x[1][a][0]`
     Used to do substitution so that if `$x` is an ETB Term, then `$x[1][a][0]`
@@ -79,6 +101,10 @@ class ETBShTemplate(Template):
     """
     idpattern = r'[_a-z][_a-z0-9]*(\[[_a-z0-9]+\])*'
 
+    # XXX this seems almost an exact copy of the code in
+    # https://github.com/google/grumpy/blob/master/third_party/stdlib/string.py#L161
+    # It is also missing the _multimap method, which is used in the.
+    # We will bring it back from the above link.
     def substitute(self, *args, **kws):
         if len(args) > 1:
             raise TypeError('Too many positional arguments')
@@ -106,7 +132,7 @@ class ETBShTemplate(Template):
                     id = named[0:bkidx]
                     argsd = named[bkidx:]
                     val = mapping[id]
-                    if isinstance(val, basestring):
+                    if isinstance(val, str):
                         # We use this idiom instead of str() because the latter will
                         # fail if val is a Unicode containing non-ASCII characters.
                         fullstr = '%s%s' % (val, argsd)
@@ -227,25 +253,25 @@ class ETBShell(ETBCmdLineClient):
     @property
     def etb_commands(self):
         """List of etb commands"""
-        all_methods = self.__class__.__dict__.values()
+        all_methods = list(self.__class__.__dict__.values())
         return self._etb_cmds.union(set(m.__name__ for \
                                             m in all_methods if hasattr(m, '_etb_command')))
 
     @property
     def client_commands(self):
-        all_methods = self.__class__.__dict__.values()
+        all_methods = list(self.__class__.__dict__.values())
         return set(m.__name__ for \
                          m in all_methods if hasattr(m, '_client_command'))
 
     @property
     def query_commands(self):
-        all_methods = self.__class__.__dict__.values()
+        all_methods = list(self.__class__.__dict__.values())
         return set(m.__name__ for \
                          m in all_methods if hasattr(m, '_query_command'))
 
     @property
     def file_commands(self):
-        all_methods = self.__class__.__dict__.values()
+        all_methods = list(self.__class__.__dict__.values())
         return set(m.__name__ for \
                          m in all_methods if hasattr(m, '_file_command'))
     
@@ -268,15 +294,15 @@ class ETBShell(ETBCmdLineClient):
         for remote_fun in self.remote_commands:
             if remote_fun in self._remote_etb_cmds:
                 if verbose: 
-                    print("Found %s in _remote_etb_cmds\n" % remote_fun)
+                    print(("Found %s in _remote_etb_cmds\n" % remote_fun))
                 current_etb_cmds.append(remote_fun)
             elif remote_fun in self._remote_admin_cmds:
                 if verbose:
-                    print("Found %s in _remote_admin_cmds\n" % remote_fun)
+                    print(("Found %s in _remote_admin_cmds\n" % remote_fun))
                 current_admin_cmds.append(remote_fun)
             else:
                 if verbose:
-                    print("Didn't find %s\n" % remote_fun)
+                    print(("Didn't find %s\n" % remote_fun))
                 pass
         return (current_etb_cmds, current_admin_cmds)
 
@@ -293,9 +319,9 @@ class ETBShell(ETBCmdLineClient):
             if self.valid_command(args[0]):
                 docs = getattr(self,args[0]).__doc__
                 #doclines = doc.splitlines()
-                print('{0}: {1}'.format(args[0], docs))
+                print(('{0}: {1}'.format(args[0], docs)))
             else:
-                print('{0} not found'.format(args[0]))
+                print(('{0} not found'.format(args[0])))
 
     def help_summary(self):
         (etb_cmds, admin_cmds) = self.sort_commands()
@@ -309,7 +335,7 @@ class ETBShell(ETBCmdLineClient):
             fun = self.__getattribute__(f)
             doc = getattr(fun, '__doc__', '').splitlines()[0]
             if doc:
-                print("{0:<25} {1}".format(f, doc))
+                print(("{0:<25} {1}".format(f, doc)))
                 
         print('\nETB commands')
         print('---------------')
@@ -317,26 +343,26 @@ class ETBShell(ETBCmdLineClient):
             fun = self.__getattribute__(f)
             doc = getattr(fun, '__doc__', '').splitlines()[0]
             if doc:
-                print("{0:<25} {1}".format(f, doc))
+                print(("{0:<25} {1}".format(f, doc)))
 
         print('\nQuery commands')
         print('--------------')
         for f in sorted(self.query_commands):
             fun = self.__getattribute__(f)
-            print("{0:<25} {1}".format(f, getattr(fun, '__doc__', '').splitlines()[0]))
+            print(("{0:<25} {1}".format(f, getattr(fun, '__doc__', '').splitlines()[0])))
 
         print('\nFile commands')
         print('-------------')
         for f in sorted(self.file_commands):
             fun = self.__getattribute__(f)
-            print("{0:<25} {1}".format(f, getattr(fun, '__doc__', '').splitlines()[0]))
+            print(("{0:<25} {1}".format(f, getattr(fun, '__doc__', '').splitlines()[0])))
             
         print('\nAdmin commands')
         print('--------------')
         for remote_fun in sorted(admin_cmds):
             hlp = self.etb().system.methodHelp(remote_fun)
             hlp = str(hlp).splitlines()[0]
-            print("{0:<25} {1}".format(remote_fun, hlp))
+            print(("{0:<25} {1}".format(remote_fun, hlp)))
 
         print('')
 
@@ -356,26 +382,26 @@ class ETBShell(ETBCmdLineClient):
         '''Load and execute an ETB script'''
         if os.path.exists(file):
             self.process_script(file, displayOutput=False)
-            print('Finished loading {0}'.format(file))
+            print(('Finished loading {0}'.format(file)))
         else:
-            print("No such file '{0}' in directory {1}".format(file, os.path.abspath('.')))
+            print(("No such file '{0}' in directory {1}".format(file, os.path.abspath('.'))))
 
     @client_command
     def echo(self, *args, **kwargs):
         '''Print its arguments'''
         if len(args) == 1:
-            print('%s' % args[0])
+            print(('%s' % args[0]))
             return args[0]
         else:
-            print(' '.join([str(a) for a in args]))
+            print((' '.join([str(a) for a in args])))
             return args
 
     @client_command
     def vars(self, *args):
         '''Print all ETB shell variables'''
         if self._bindings:
-            for var, val in self._bindings.iteritems():
-                print('{0} = {1}'.format(var, val))
+            for var, val in self._bindings.items():
+                print(('{0} = {1}'.format(var, val)))
         else:
             print('No ETB shell variables')
 
@@ -401,9 +427,9 @@ class ETBShell(ETBCmdLineClient):
     @file_command
     def get_file(self, src, dst=None):
         '''Get a file from the ETB'''
-        if isinstance(src, basestring):
+        if isinstance(src, str):
             src = parser.parse_term(src)
-        if isinstance(dst, basestring):
+        if isinstance(dst, str):
             dst = parser.parse_term(dst)
         return ETBClient.get_file(self, src, dst)
 
@@ -415,12 +441,12 @@ class ETBShell(ETBCmdLineClient):
     @file_command
     def lpwd(self):
         '''Print the local (shell) working directory'''
-        print(os.getcwd())
+        print((os.getcwd()))
 
     @file_command
     def lcd(self, *args):
         '''Change the local (shell) working directory - e.g. lcd(/home/user)'''
-        if len(args) == 1 and isinstance(args[0], basestring): # Fails in Python 3
+        if len(args) == 1 and isinstance(args[0], str): # Fails in Python 3
             os.chdir(args[0])
             self._root_dir = os.getcwd()
         else:
@@ -432,14 +458,14 @@ class ETBShell(ETBCmdLineClient):
         ls = os.listdir(os.getcwd())
         for f in ls:
             if os.path.isdir(f):
-                print('%s/' % f)
+                print(('%s/' % f))
             else:
                 print(f)
 
     @file_command
     def pwd(self):
         '''Print the current ETB (server) working directory'''
-        print(self.config.git_dir)
+        print((self.config.git_dir))
 
     # @file_command
     # def cd(self, path):
@@ -478,20 +504,20 @@ class ETBShell(ETBCmdLineClient):
     def rules(self):
         '''List the rules'''
         rules_dict = terms.loads(self.etb().get_rules())
-        for file, rules in rules_dict.iteritems():
-            print('Rules from file {0}:\n---------'.format(file))
+        for file, rules in rules_dict.items():
+            print(('Rules from file {0}:\n---------'.format(file)))
             for rule in rules:
-                print('{0}'.format(rule))
+                print(('{0}'.format(rule)))
 
     @etb_command
     def facts(self, all=False):
         '''List the facts'''
         facts_dict = terms.loads(self.etb().get_facts())
-        print('facts_dict = {0}'.format(facts_dict))
-        for file, facts in facts_dict.iteritems():
-            print('Facts from file {0}:\n---------'.format(file))
+        print(('facts_dict = {0}'.format(facts_dict)))
+        for file, facts in facts_dict.items():
+            print(('Facts from file {0}:\n---------'.format(file)))
             for fact in facts:
-                print('{0}.'.format(fact))
+                print(('{0}.'.format(fact)))
 
 
     ########## Query commands
@@ -555,17 +581,17 @@ class ETBShell(ETBCmdLineClient):
             print('------')
             for q in q_active:
                 if q in self._queries:
-                    print('  %s    %s' % (q, self._queries[q]))
+                    print(('  %s    %s' % (q, self._queries[q])))
                 else:
-                    print('  %s' % q)
+                    print(('  %s' % q))
         if q_done:
             print('\nCompleted')
             print('---------')
             for q in q_done:
                 if q in self._queries:
-                    print('  %s    %s' % (q, self._queries[q]))
+                    print(('  %s    %s' % (q, self._queries[q])))
                 else:
-                    print('  %s' % q)
+                    print(('  %s' % q))
         print('')
         
     def translate_answers(self, output):
@@ -579,7 +605,7 @@ class ETBShell(ETBCmdLineClient):
         output = self.etb().query_answers(q)
         if output:
             answers = terms.loads(output)
-            print('\nAnswers for query %s' % q)
+            print(('\nAnswers for query %s' % q))
             print('==================================================')
             if answers:
                 for s in answers:
@@ -596,9 +622,9 @@ class ETBShell(ETBCmdLineClient):
         else:
             title = '\n{1} Claims {0}'.format(title, len(claims))
         subtitle = '=' * (len(title)-1)
-        print('%s\n%s' % (title, subtitle))
+        print(('%s\n%s' % (title, subtitle)))
         for c in claims:
-            print('  %s' % c)
+            print(('  %s' % c))
         print('')
         
 
@@ -655,7 +681,7 @@ class ETBShell(ETBCmdLineClient):
         elif s == 'Darwin':
             cmd = 'open'
         else:
-            print('Warning: don''t know how to view file on %s' % s)
+            print(('Warning: don''t know how to view file on %s' % s))
             return        
         os.system('%s %s' % (cmd, file))
 
@@ -719,7 +745,7 @@ class ETBShell(ETBCmdLineClient):
         self.etb().query_wait(query)
         end = time.time()
         diff = end - start
-        print("Claims calculated in ", diff, " seconds...")
+        print(("Claims calculated in ", diff, " seconds..."))
         self.claims(query)
 
        
@@ -881,10 +907,10 @@ class ETBShell(ETBCmdLineClient):
                 
         elif cmd in self.remote_commands:
             try:
-                print('process: getting fun for {0}'.format(cmd))
+                print(('process: getting fun for {0}'.format(cmd)))
                 fun = getattr(self.etb(), cmd, lambda *args: None)
                 #print_star_args(*args)
-                print('process: calling fun {0} {1}'.format(cmd, args))
+                print(('process: calling fun {0} {1}'.format(cmd, args)))
                 output = fun(*args)
                 print('process: after fun')
                 if binding is not None :
@@ -892,10 +918,10 @@ class ETBShell(ETBCmdLineClient):
                 elif displayOutput:
                     pprint.pprint(output)
             except Exception as e:
-                print("Exception occured:", e)
+                print(("Exception occured:", e))
                 traceback.print_exc(file=sys.stderr)
         else:
-            print('doing query: cmd = {0}'.format(cmd))
+            print(('doing query: cmd = {0}'.format(cmd)))
             if len(args) > 0:
                 output = self.query('%s(%s)' % (cmd, ','.join([ str(a) for a in args])))
             else:
@@ -913,18 +939,18 @@ class ETBShell(ETBCmdLineClient):
                 # Give ETB a chance to print.
                 # sleep(.1)
                 prompted = True
-                command = raw_input(self.config.prompt_string).strip()
+                command = input(self.config.prompt_string).strip()
                 self.process(command)
                 #self.read_from_etb()
             except KeyboardInterrupt:
                 print("Interrupted")
             except EOFError:
                 self.quit()
-            except xmlrpclib.Error as e:
-                print("error:", e)
+            except xmlrpc.client.Error as e:
+                print(("error:", e))
                 traceback.print_exc(file=sys.stderr)
             except Exception as e:
-                print('Error: {0}'.format(e))
+                print(('Error: {0}'.format(e)))
                 traceback.print_exc(file=sys.stderr)
 
     def process_script(self, scripts, displayOutput=False):
@@ -938,10 +964,10 @@ class ETBShell(ETBCmdLineClient):
                         self.process(command, displayOutput)
                     except EOFError:
                         print("")
-                    except xmlrpclib.Error as e:
-                        print("error:", e)
+                    except xmlrpc.client.Error as e:
+                        print(("error:", e))
                     except Exception as e:
-                        print("oops!", e)
+                        print(("oops!", e))
                         traceback.print_exc(file=sys.stderr)
                     
     def start_etb(self, port, debuglevel):
@@ -999,13 +1025,13 @@ class ETBShell(ETBCmdLineClient):
             self.blank_current_readline()
         for line in output.splitlines(False):
             if re.search('INFO:', line):
-                print(self.config.info_color + line + Style.RESET_ALL)
+                print((self.config.info_color + line + Style.RESET_ALL))
             elif re.search('WARNING:', line):
-                print(self.config.warning_color + line + Style.RESET_ALL)
+                print((self.config.warning_color + line + Style.RESET_ALL))
             elif re.search('ERROR:', line):
-                print(self.config.error_color + line + Style.RESET_ALL)
+                print((self.config.error_color + line + Style.RESET_ALL))
             else:
-                print(self.config.text_color + line + Style.RESET_ALL)
+                print((self.config.text_color + line + Style.RESET_ALL))
         if prompted:
             sys.stdout.write(self.config.prompt_string.translate(None, '\x01\x02')
                              + readline.get_line_buffer())
@@ -1053,7 +1079,7 @@ def main():
             #     print('Removing {0}'.format('etb_logic_file'))
             #     os.remove('etb_logic_file')
             if os.path.exists(s.config.git_dir):
-                print('Removing {0}'.format(s.config.git_dir))
+                print(('Removing {0}'.format(s.config.git_dir)))
                 shutil.rmtree(s.config.git_dir)
         s.etbproc = None
         if not s.config.noetb:
